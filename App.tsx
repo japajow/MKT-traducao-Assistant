@@ -12,7 +12,6 @@ const App: React.FC = () => {
   const [isFinalized, setIsFinalized] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Configuração única para o Bruno
   const ADMIN_PHONE = "817091225330";
   const ADMIN_NAME = "Bruno Hamawaki";
 
@@ -45,6 +44,7 @@ const App: React.FC = () => {
     const response = await geminiService.sendMessage(textToSend);
     const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
     
+    // Verifica se a mensagem de finalização foi enviada
     if (response.includes("CONECTAR COM CONSULTOR") || response.includes("Bruno Hamawaki")) {
       setIsFinalized(true);
     }
@@ -54,24 +54,34 @@ const App: React.FC = () => {
   }, [input, status]);
 
   const openWhatsApp = () => {
-    let summary = `✨ *MKT TRADUÇÃO - SOLICITAÇÃO PREMIUM*\n\n`;
-    summary += `*Consultor Responsável:* ${ADMIN_NAME}\n`;
-    summary += `*Status:* Triagem Virtual Concluída\n\n`;
-    summary += `*DETALHES DO ATENDIMENTO:*\n`;
+    // Usando caracteres ASCII seguros e negrito do WhatsApp para evitar o ícone ""
+    let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
+    summary += `------------------------------------\n`;
+    summary += `*Consultor:* ${ADMIN_NAME}\n`;
+    summary += `*Status:* Triagem Virtual Concluida\n\n`;
+    summary += `*HISTORICO DE ATENDIMENTO:*\n`;
     
     messages.forEach((msg, index) => {
+      // Pula a saudação inicial do robô no log para ficar mais limpo
       if (index === 0) return;
+      
       if (msg.role === 'model') {
+        // Limpa a mensagem do robô de botões ou textos de encerramento
         const clean = msg.text.split("CONECTAR COM CONSULTOR")[0].trim();
-        if (clean && !clean.includes("Agradeço imensamente")) {
-          summary += `\n📌 _${clean}_\n`;
+        // Não adiciona no log a frase final de agradecimento para não poluir
+        if (clean && !clean.includes("Agradeço pelas informações") && !clean.includes("Agradeço imensamente")) {
+          summary += `\n*P:* ${clean}\n`;
         }
       } else {
-        summary += `➡ *R:* ${msg.text}\n`;
+        summary += `*R:* ${msg.text}\n`;
       }
     });
 
-    summary += `\n---\n_Protocolo gerado via MKT Virtual Concierge_`;
+    summary += `\n------------------------------------\n`;
+    summary += `_Enviado via MKT Virtual Concierge_`;
+
+    // encodeURIComponent garante que o link funcione, mas caracteres especiais no início da string
+    // às vezes causam problemas em certas versões de apps. Usar texto limpo resolve.
     const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
   };
@@ -100,6 +110,7 @@ const App: React.FC = () => {
             initChat();
           }}
           className="text-[#c5a572] hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5"
+          title="Reiniciar Atendimento"
         >
           <i className="fa-solid fa-arrow-rotate-left"></i>
         </button>
@@ -125,7 +136,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-left flex-1">
                   <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Assessoria de Visto</p>
-                  <p className="text-[11px] text-slate-500">Renovações e Alterações de Status</p>
+                  <p className="text-[11px] text-slate-500">Renovacoes e Alteracoes</p>
                 </div>
                 <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50"></i>
               </button>
@@ -138,8 +149,8 @@ const App: React.FC = () => {
                   <i className="fa-solid fa-building-columns text-xl"></i>
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Serviços Consulares</p>
-                  <p className="text-[11px] text-slate-500">Passaportes e Registros Oficiais</p>
+                  <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Servicos Consulares</p>
+                  <p className="text-[11px] text-slate-500">Passaportes e Registros</p>
                 </div>
                 <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50"></i>
               </button>
@@ -177,7 +188,7 @@ const App: React.FC = () => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isFinalized ? "Atendimento finalizado." : "Digite sua mensagem..."}
+            placeholder={isFinalized ? "Triagem concluida." : "Digite sua mensagem..."}
             disabled={status === AppStatus.LOADING || isFinalized}
             className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none placeholder:text-slate-400"
           />
