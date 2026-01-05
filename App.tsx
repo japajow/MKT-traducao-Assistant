@@ -44,7 +44,6 @@ const App: React.FC = () => {
     const response = await geminiService.sendMessage(textToSend);
     const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
     
-    // Verifica se a mensagem de finalização foi enviada
     if (response.includes("CONECTAR COM CONSULTOR") || response.includes("Bruno Hamawaki")) {
       setIsFinalized(true);
     }
@@ -54,7 +53,6 @@ const App: React.FC = () => {
   }, [input, status]);
 
   const openWhatsApp = () => {
-    // Usando caracteres ASCII seguros e negrito do WhatsApp para evitar o ícone ""
     let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
     summary += `------------------------------------\n`;
     summary += `*Consultor:* ${ADMIN_NAME}\n`;
@@ -62,13 +60,9 @@ const App: React.FC = () => {
     summary += `*HISTORICO DE ATENDIMENTO:*\n`;
     
     messages.forEach((msg, index) => {
-      // Pula a saudação inicial do robô no log para ficar mais limpo
       if (index === 0) return;
-      
       if (msg.role === 'model') {
-        // Limpa a mensagem do robô de botões ou textos de encerramento
         const clean = msg.text.split("CONECTAR COM CONSULTOR")[0].trim();
-        // Não adiciona no log a frase final de agradecimento para não poluir
         if (clean && !clean.includes("Agradeço pelas informações") && !clean.includes("Agradeço imensamente")) {
           summary += `\n*P:* ${clean}\n`;
         }
@@ -80,26 +74,24 @@ const App: React.FC = () => {
     summary += `\n------------------------------------\n`;
     summary += `_Enviado via MKT Virtual Concierge_`;
 
-    // encodeURIComponent garante que o link funcione, mas caracteres especiais no início da string
-    // às vezes causam problemas em certas versões de apps. Usar texto limpo resolve.
     const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
   };
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-200">
-      {/* Header Premium */}
-      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-6 py-5 flex items-center justify-between shrink-0 shadow-xl">
-        <div className="flex items-center space-x-4">
+      {/* Header Premium - Compactado */}
+      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-3 flex items-center justify-between shrink-0 shadow-xl z-10">
+        <div className="flex items-center space-x-3">
           <div className="relative">
-            <div className="gold-gradient w-12 h-12 rounded-full flex items-center justify-center text-[#0f172a] shadow-lg border-2 border-white/10">
-              <i className="fa-solid fa-crown text-xl"></i>
+            <div className="gold-gradient w-10 h-10 rounded-full flex items-center justify-center text-[#0f172a] shadow-lg border-2 border-white/10">
+              <i className="fa-solid fa-crown text-base"></i>
             </div>
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-[#0f172a] rounded-full"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-[#0f172a] rounded-full"></div>
           </div>
           <div>
-            <h1 className="text-white font-serif-premium text-lg tracking-wide leading-tight">MKT-traducao</h1>
-            <p className="text-[#c5a572] text-[10px] uppercase tracking-[0.2em] font-bold">Virtual Concierge Service</p>
+            <h1 className="text-white font-serif-premium text-base tracking-wide leading-tight">MKT-traducao</h1>
+            <p className="text-[#c5a572] text-[9px] uppercase tracking-[0.2em] font-bold">Virtual Concierge</p>
           </div>
         </div>
         <button 
@@ -112,13 +104,13 @@ const App: React.FC = () => {
           className="text-[#c5a572] hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5"
           title="Reiniciar Atendimento"
         >
-          <i className="fa-solid fa-arrow-rotate-left"></i>
+          <i className="fa-solid fa-arrow-rotate-left text-sm"></i>
         </button>
       </header>
 
-      {/* Área de Mensagens */}
+      {/* Área de Mensagens - Padding ajustado */}
       <main className="flex-1 overflow-hidden relative bg-[#fcfcfc]">
-        <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-8 space-y-6 no-scrollbar">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-6 space-y-5 no-scrollbar">
           {messages.map((msg, idx) => (
             <div key={idx} className="message-appear">
               <ChatMessage message={msg} />
@@ -126,39 +118,39 @@ const App: React.FC = () => {
           ))}
           
           {showOptions && status === AppStatus.IDLE && messages.length === 1 && (
-            <div className="flex flex-col space-y-4 mt-6 px-4 animate-fade-in">
+            <div className="flex flex-col space-y-3 mt-4 px-2 animate-fade-in">
               <button 
                 onClick={() => handleSendMessage("VISTO")}
-                className="premium-card w-full p-5 rounded-2xl flex items-center group"
+                className="premium-card w-full p-4 rounded-xl flex items-center group"
               >
-                <div className="w-12 h-12 gold-gradient text-[#0f172a] rounded-xl flex items-center justify-center mr-5 shadow-inner transition-transform group-hover:scale-105">
-                  <i className="fa-solid fa-passport text-xl"></i>
+                <div className="w-10 h-10 gold-gradient text-[#0f172a] rounded-lg flex items-center justify-center mr-4 shadow-inner transition-transform group-hover:scale-105">
+                  <i className="fa-solid fa-passport text-lg"></i>
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Assessoria de Visto</p>
-                  <p className="text-[11px] text-slate-500">Renovacoes e Alteracoes</p>
+                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Assessoria de Visto</p>
+                  <p className="text-[10px] text-slate-500">Renovacoes e Alteracoes</p>
                 </div>
-                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50"></i>
+                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50 text-xs"></i>
               </button>
 
               <button 
                 onClick={() => handleSendMessage("CONSULADO")}
-                className="premium-card w-full p-5 rounded-2xl flex items-center group"
+                className="premium-card w-full p-4 rounded-xl flex items-center group"
               >
-                <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center mr-5 transition-all group-hover:bg-[#0f172a] group-hover:text-[#c5a572]">
-                  <i className="fa-solid fa-building-columns text-xl"></i>
+                <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center mr-4 transition-all group-hover:bg-[#0f172a] group-hover:text-[#c5a572]">
+                  <i className="fa-solid fa-building-columns text-lg"></i>
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Servicos Consulares</p>
-                  <p className="text-[11px] text-slate-500">Passaportes e Registros</p>
+                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Servicos Consulares</p>
+                  <p className="text-[10px] text-slate-500">Passaportes e Registros</p>
                 </div>
-                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50"></i>
+                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50 text-xs"></i>
               </button>
             </div>
           )}
 
           {status === AppStatus.LOADING && (
-            <div className="flex justify-start items-center space-x-2 bg-white w-16 px-4 py-4 rounded-2xl rounded-tl-none border border-slate-200 shadow-sm ml-10">
+            <div className="flex justify-start items-center space-x-2 bg-white w-14 px-3 py-3 rounded-xl rounded-tl-none border border-slate-200 shadow-sm ml-10">
               <div className="w-1.5 h-1.5 bg-[#c5a572] rounded-full animate-bounce"></div>
               <div className="w-1.5 h-1.5 bg-[#c5a572] rounded-full animate-bounce [animation-delay:-.3s]"></div>
               <div className="w-1.5 h-1.5 bg-[#c5a572] rounded-full animate-bounce [animation-delay:-.5s]"></div>
@@ -167,44 +159,44 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Botão Finalizador - Foco no Bruno */}
-      <div className={`px-4 transition-all duration-700 ${isFinalized ? 'max-h-32 py-4' : 'max-h-0 py-0 overflow-hidden'}`}>
+      {/* Botão Finalizador - Redimensionado para caber em widgets compactos */}
+      <div className={`px-4 transition-all duration-500 ease-in-out ${isFinalized ? 'max-h-24 py-3 border-t border-slate-100 bg-white' : 'max-h-0 py-0 overflow-hidden'}`}>
         <button 
           onClick={openWhatsApp}
-          className="w-full gold-gradient hover:brightness-110 text-[#0f172a] font-bold py-5 rounded-2xl flex items-center justify-center space-x-3 shadow-[0_10px_30px_rgba(197,165,114,0.3)] transition-all active:scale-95"
+          className="w-full gold-gradient hover:brightness-110 text-[#0f172a] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg transition-all active:scale-95 border border-[#0f172a]/10"
         >
-          <i className="fa-brands fa-whatsapp text-2xl"></i>
-          <span className="uppercase tracking-[0.1em]">Conectar com Consultor Bruno</span>
+          <i className="fa-brands fa-whatsapp text-xl"></i>
+          <span className="uppercase tracking-wider text-[11px] sm:text-xs">Falar com Consultor Bruno</span>
         </button>
       </div>
 
-      {/* Footer / Input */}
-      <footer className="p-6 bg-white border-t border-slate-100 shrink-0">
+      {/* Footer / Input - Compactado */}
+      <footer className="p-4 bg-white border-t border-slate-100 shrink-0">
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-          className="flex items-center bg-slate-50 rounded-2xl px-5 py-2 border border-slate-200 focus-within:border-[#c5a572] focus-within:bg-white transition-all shadow-inner"
+          className="flex items-center bg-slate-50 rounded-xl px-4 py-1.5 border border-slate-200 focus-within:border-[#c5a572] focus-within:bg-white transition-all shadow-inner"
         >
           <input 
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isFinalized ? "Triagem concluida." : "Digite sua mensagem..."}
+            placeholder={isFinalized ? "Triagem concluida." : "Sua mensagem..."}
             disabled={status === AppStatus.LOADING || isFinalized}
-            className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none placeholder:text-slate-400"
+            className="flex-1 py-2 bg-transparent text-sm text-[#0f172a] outline-none placeholder:text-slate-400"
           />
           <button 
             type="submit"
             disabled={!input.trim() || status === AppStatus.LOADING || isFinalized}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all 
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all 
               ${!input.trim() || status === AppStatus.LOADING || isFinalized
                 ? 'text-slate-300' 
-                : 'bg-[#0f172a] text-[#c5a572] shadow-lg hover:scale-105 active:scale-90'}`}
+                : 'bg-[#0f172a] text-[#c5a572] shadow-md hover:scale-105 active:scale-90'}`}
           >
-            <i className="fa-solid fa-paper-plane text-sm"></i>
+            <i className="fa-solid fa-paper-plane text-xs"></i>
           </button>
         </form>
-        <div className="mt-4 text-center">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em]">EXCELLENCE IN SERVICE</p>
+        <div className="mt-3 text-center">
+            <p className="text-[8px] text-slate-400 font-bold uppercase tracking-[0.3em]">Excellence in Service</p>
         </div>
       </footer>
     </div>
