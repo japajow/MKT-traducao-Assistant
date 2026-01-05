@@ -12,21 +12,19 @@ const App: React.FC = () => {
   const [isFinalized, setIsFinalized] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const WHATSAPP_NUMBER = "817091225330";
+  // Configuração única para o Bruno
+  const ADMIN_PHONE = "817091225330";
+  const ADMIN_NAME = "Bruno Hamawaki";
 
   const initChat = async () => {
     setStatus(AppStatus.LOADING);
-    const response = await geminiService.sendMessage("Olá");
-    setMessages([
-      { role: 'model', text: response, timestamp: new Date() }
-    ]);
+    const response = await geminiService.sendMessage("Olá, iniciar atendimento");
+    setMessages([{ role: 'model', text: response, timestamp: new Date() }]);
     setStatus(AppStatus.IDLE);
     setShowOptions(true);
   };
 
-  useEffect(() => {
-    initChat();
-  }, []);
+  useEffect(() => { initChat(); }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -47,58 +45,51 @@ const App: React.FC = () => {
     const response = await geminiService.sendMessage(textToSend);
     const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
     
-    // Detectar se a conversa foi finalizada
-    if (response.includes("ENVIAR DADOS AO WHATSAPP") || response.includes("Muito obrigado pelas informações")) {
+    if (response.includes("CONECTAR COM CONSULTOR") || response.includes("Bruno Hamawaki")) {
       setIsFinalized(true);
     }
 
     setMessages(prev => [...prev, modelMsg]);
     setStatus(AppStatus.IDLE);
-  }, [input, status, messages]);
+  }, [input, status]);
 
   const openWhatsApp = () => {
-    let summary = "📋 *NOVO ATENDIMENTO - MKT-TRADUCAO*\n\n";
-    summary += "*Histórico da Triagem:*\n";
+    let summary = `✨ *MKT TRADUÇÃO - SOLICITAÇÃO PREMIUM*\n\n`;
+    summary += `*Consultor Responsável:* ${ADMIN_NAME}\n`;
+    summary += `*Status:* Triagem Virtual Concluída\n\n`;
+    summary += `*DETALHES DO ATENDIMENTO:*\n`;
     
-    // Mapeia o diálogo para que o consultor veja pergunta e resposta
     messages.forEach((msg, index) => {
-      if (index === 0) return; // Pula a saudação inicial do bot
-      
+      if (index === 0) return;
       if (msg.role === 'model') {
-        // Formata as perguntas do bot (limpa o texto do botão)
-        const cleanText = msg.text.split("ENVIAR DADOS AO WHATSAPP")[0].trim();
-        if (cleanText && !cleanText.includes("Muito obrigado pelas informações")) {
-          summary += `\n🤖 _${cleanText}_\n`;
+        const clean = msg.text.split("CONECTAR COM CONSULTOR")[0].trim();
+        if (clean && !clean.includes("Agradeço imensamente")) {
+          summary += `\n📌 _${clean}_\n`;
         }
       } else {
-        // Formata as respostas do usuário
-        summary += `✅ *R:* ${msg.text}\n`;
+        summary += `➡ *R:* ${msg.text}\n`;
       }
     });
 
-    summary += "\n---\n_Enviado via Assistente Virtual MKT_";
-
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(summary)}`;
+    summary += `\n---\n_Protocolo gerado via MKT Virtual Concierge_`;
+    const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-100">
-      {/* Header Compacto */}
-      <header className="bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center space-x-3">
+    <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-200">
+      {/* Header Premium */}
+      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-6 py-5 flex items-center justify-between shrink-0 shadow-xl">
+        <div className="flex items-center space-x-4">
           <div className="relative">
-            <div className="bg-red-600 w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md">
-              <i className="fa-solid fa-passport text-lg"></i>
+            <div className="gold-gradient w-12 h-12 rounded-full flex items-center justify-center text-[#0f172a] shadow-lg border-2 border-white/10">
+              <i className="fa-solid fa-crown text-xl"></i>
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-[#0f172a] rounded-full"></div>
           </div>
           <div>
-            <h1 className="text-base font-bold text-slate-800 leading-tight">MKT-traducao</h1>
-            <p className="text-[11px] text-green-600 font-semibold flex items-center">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-              Online agora
-            </p>
+            <h1 className="text-white font-serif-premium text-lg tracking-wide leading-tight">MKT-traducao</h1>
+            <p className="text-[#c5a572] text-[10px] uppercase tracking-[0.2em] font-bold">Virtual Concierge Service</p>
           </div>
         </div>
         <button 
@@ -108,109 +99,101 @@ const App: React.FC = () => {
             setIsFinalized(false);
             initChat();
           }}
-          className="text-slate-400 hover:text-red-600 transition-colors p-2"
+          className="text-[#c5a572] hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5"
         >
-          <i className="fa-solid fa-rotate-right text-sm"></i>
+          <i className="fa-solid fa-arrow-rotate-left"></i>
         </button>
       </header>
 
       {/* Área de Mensagens */}
-      <main className="flex-1 overflow-hidden relative bg-slate-50/30">
-        <div 
-          ref={scrollRef}
-          className="h-full overflow-y-auto px-4 py-6 space-y-4 no-scrollbar"
-        >
+      <main className="flex-1 overflow-hidden relative bg-[#fcfcfc]">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-8 space-y-6 no-scrollbar">
           {messages.map((msg, idx) => (
             <div key={idx} className="message-appear">
               <ChatMessage message={msg} />
             </div>
           ))}
           
-          {/* Opções Iniciais Visuais */}
           {showOptions && status === AppStatus.IDLE && messages.length === 1 && (
-            <div className="flex flex-col space-y-3 mt-4 px-2">
+            <div className="flex flex-col space-y-4 mt-6 px-4 animate-fade-in">
               <button 
                 onClick={() => handleSendMessage("VISTO")}
-                className="quick-option-btn w-full bg-white border-2 border-slate-100 hover:border-red-500 hover:bg-red-50 p-4 rounded-2xl flex items-center justify-between group shadow-sm"
+                className="premium-card w-full p-5 rounded-2xl flex items-center group"
               >
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center mr-4 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                    <i className="fa-solid fa-id-card"></i>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-slate-800 text-sm">Opção 1: VISTO</p>
-                    <p className="text-xs text-slate-500">Renovação, troca ou solicitação</p>
-                  </div>
+                <div className="w-12 h-12 gold-gradient text-[#0f172a] rounded-xl flex items-center justify-center mr-5 shadow-inner transition-transform group-hover:scale-105">
+                  <i className="fa-solid fa-passport text-xl"></i>
                 </div>
-                <i className="fa-solid fa-chevron-right text-slate-300 group-hover:text-red-500"></i>
+                <div className="text-left flex-1">
+                  <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Assessoria de Visto</p>
+                  <p className="text-[11px] text-slate-500">Renovações e Alterações de Status</p>
+                </div>
+                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50"></i>
               </button>
 
               <button 
                 onClick={() => handleSendMessage("CONSULADO")}
-                className="quick-option-btn w-full bg-white border-2 border-slate-100 hover:border-blue-500 hover:bg-blue-50 p-4 rounded-2xl flex items-center justify-between group shadow-sm"
+                className="premium-card w-full p-5 rounded-2xl flex items-center group"
               >
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                    <i className="fa-solid fa-building-columns"></i>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-slate-800 text-sm">Opção 2: CONSULADO</p>
-                    <p className="text-xs text-slate-500">Passaporte, Registros e Procurações</p>
-                  </div>
+                <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center mr-5 transition-all group-hover:bg-[#0f172a] group-hover:text-[#c5a572]">
+                  <i className="fa-solid fa-building-columns text-xl"></i>
                 </div>
-                <i className="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-500"></i>
+                <div className="text-left flex-1">
+                  <p className="font-bold text-[#0f172a] text-sm uppercase tracking-wider">Serviços Consulares</p>
+                  <p className="text-[11px] text-slate-500">Passaportes e Registros Oficiais</p>
+                </div>
+                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50"></i>
               </button>
             </div>
           )}
 
           {status === AppStatus.LOADING && (
-            <div className="flex justify-start items-center space-x-2 bg-white w-16 px-3 py-3 rounded-2xl rounded-tl-none border border-slate-100 shadow-sm ml-10">
-              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce"></div>
-              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:-.3s]"></div>
-              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:-.5s]"></div>
+            <div className="flex justify-start items-center space-x-2 bg-white w-16 px-4 py-4 rounded-2xl rounded-tl-none border border-slate-200 shadow-sm ml-10">
+              <div className="w-1.5 h-1.5 bg-[#c5a572] rounded-full animate-bounce"></div>
+              <div className="w-1.5 h-1.5 bg-[#c5a572] rounded-full animate-bounce [animation-delay:-.3s]"></div>
+              <div className="w-1.5 h-1.5 bg-[#c5a572] rounded-full animate-bounce [animation-delay:-.5s]"></div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Botão do WhatsApp (Dinâmico) */}
-      <div className={`px-4 transition-all duration-500 ease-in-out ${isFinalized ? 'max-h-24 py-2 opacity-100' : 'max-h-0 py-0 opacity-0 overflow-hidden'}`}>
+      {/* Botão Finalizador - Foco no Bruno */}
+      <div className={`px-4 transition-all duration-700 ${isFinalized ? 'max-h-32 py-4' : 'max-h-0 py-0 overflow-hidden'}`}>
         <button 
           onClick={openWhatsApp}
-          className="w-full bg-[#25D366] hover:bg-[#20ba59] text-white font-bold py-4 rounded-2xl flex items-center justify-center space-x-3 shadow-lg transform transition-transform active:scale-95"
+          className="w-full gold-gradient hover:brightness-110 text-[#0f172a] font-bold py-5 rounded-2xl flex items-center justify-center space-x-3 shadow-[0_10px_30px_rgba(197,165,114,0.3)] transition-all active:scale-95"
         >
           <i className="fa-brands fa-whatsapp text-2xl"></i>
-          <span>ENVIAR DADOS AO WHATSAPP</span>
+          <span className="uppercase tracking-[0.1em]">Conectar com Consultor Bruno</span>
         </button>
       </div>
 
-      {/* Input de Mensagem */}
-      <footer className="p-4 bg-white border-t border-slate-100 shrink-0">
+      {/* Footer / Input */}
+      <footer className="p-6 bg-white border-t border-slate-100 shrink-0">
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-          className="flex items-center bg-slate-100 rounded-2xl px-4 py-1 border border-transparent focus-within:border-red-200 focus-within:bg-white transition-all"
+          className="flex items-center bg-slate-50 rounded-2xl px-5 py-2 border border-slate-200 focus-within:border-[#c5a572] focus-within:bg-white transition-all shadow-inner"
         >
           <input 
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isFinalized ? "Triagem concluída." : "Responda aqui..."}
+            placeholder={isFinalized ? "Atendimento finalizado." : "Digite sua mensagem..."}
             disabled={status === AppStatus.LOADING || isFinalized}
-            className="flex-1 py-3 bg-transparent text-sm text-slate-700 outline-none"
+            className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none placeholder:text-slate-400"
           />
           <button 
             type="submit"
             disabled={!input.trim() || status === AppStatus.LOADING || isFinalized}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all 
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all 
               ${!input.trim() || status === AppStatus.LOADING || isFinalized
                 ? 'text-slate-300' 
-                : 'bg-red-600 text-white shadow-md active:scale-90'}`}
+                : 'bg-[#0f172a] text-[#c5a572] shadow-lg hover:scale-105 active:scale-90'}`}
           >
             <i className="fa-solid fa-paper-plane text-sm"></i>
           </button>
         </form>
-        <div className="flex justify-center mt-2">
-            <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Powered by MKT-traducao</span>
+        <div className="mt-4 text-center">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em]">EXCELLENCE IN SERVICE</p>
         </div>
       </footer>
     </div>
