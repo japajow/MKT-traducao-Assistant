@@ -9,6 +9,7 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [isFinalized, setIsFinalized] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ADMIN_PHONE = "817091225330";
@@ -33,43 +34,42 @@ const App: React.FC = () => {
     const textToSend = textOverride || input;
     if (!textToSend.trim() || status === AppStatus.LOADING) return;
 
+    setHasError(false);
     const userMsg: Message = { role: 'user', text: textToSend, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setStatus(AppStatus.LOADING);
 
     const response = await geminiService.sendMessage(textToSend);
-    const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
     
-    if (response.includes("CONECTAR COM CONSULTOR")) {
-      setIsFinalized(true);
+    if (response.startsWith("ERRO_CRITICO")) {
+      setHasError(true);
+      const cleanError = response.replace("ERRO_CRITICO: ", "");
+      const modelMsg: Message = { role: 'model', text: cleanError, timestamp: new Date() };
+      setMessages(prev => [...prev, modelMsg]);
+    } else {
+      const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
+      if (response.includes("CONECTAR COM CONSULTOR")) {
+        setIsFinalized(true);
+      }
+      setMessages(prev => [...prev, modelMsg]);
     }
 
-    setMessages(prev => [...prev, modelMsg]);
     setStatus(AppStatus.IDLE);
   }, [input, status]);
 
-  // Função para extrair botões do texto da IA
   const parseOptions = (text: string) => {
     const options: string[] = [];
-    
-    // Procura por (A), (B), (C) ou 1., 2., 3. seguidos de texto
-    const regexOptions = /(?:\(|\b)([A-C1-5])(?:\.|\))\s*([^\n\r(]+)/gi;
+    const regexOptions = /(?:\(|\b)([A-D1-5])(?:\.|\))\s*([^\n\r(]+)/gi;
     let match;
     while ((match = regexOptions.exec(text)) !== null) {
       options.push(match[0].trim());
     }
-
-    // Se não achou padrões complexos, busca palavras-chave simples
     if (options.length === 0) {
-      if (text.toLowerCase().includes("sim") && text.toLowerCase().includes("não")) {
-        options.push("Sim", "Não");
-      }
-      if (text.toLowerCase().includes("1 ano") && text.toLowerCase().includes("3 anos")) {
-        options.push("1 ano", "3 anos", "5 anos");
-      }
+      const low = text.toLowerCase();
+      if (low.includes("sim") && low.includes("não")) options.push("Sim", "Não");
+      if (low.includes("1 ano") && low.includes("3 anos")) options.push("1 ano", "3 anos", "5 anos");
     }
-
     return options;
   };
 
@@ -80,15 +80,11 @@ const App: React.FC = () => {
   const openWhatsApp = () => {
     let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
     summary += `------------------------------------\n`;
-    summary += `*Consultor:* ${ADMIN_NAME}\n\n`;
+    summary += `*Status:* ${hasError ? 'Contingencia por Erro' : 'Triagem Concluida'}\n\n`;
     
-    messages.forEach((msg, index) => {
-      if (index === 0) return;
+    messages.forEach((msg) => {
       if (msg.role === 'user') summary += `*R:* ${msg.text}\n`;
     });
-
-    summary += `\n------------------------------------\n`;
-    summary += `_Triagem via MKT Concierge_`;
 
     const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
@@ -106,7 +102,7 @@ const App: React.FC = () => {
             <p className="text-[#c5a572] text-[8px] uppercase tracking-widest font-bold">Virtual Concierge</p>
           </div>
         </div>
-        <button onClick={() => { geminiService.reset(); setMessages([]); setIsFinalized(false); initChat(); }} className="text-[#c5a572] hover:text-white transition-colors">
+        <button onClick={() => { geminiService.reset(); setMessages([]); setIsFinalized(false); setHasError(false); initChat(); }} className="text-[#c5a572] hover:text-white transition-colors">
           <i className="fa-solid fa-arrow-rotate-left text-xs"></i>
         </button>
       </header>
@@ -120,13 +116,13 @@ const App: React.FC = () => {
           ))}
           
           {/* BOTÕES DINÂMICOS */}
-          {!isFinalized && status === AppStatus.IDLE && currentOptions.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4 px-1 animate-fade-in ml-10">
+          {!isFinalized && !hasError && status === AppStatus.IDLE && currentOptions.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2 px-1 animate-fade-in ml-10">
               {currentOptions.map((opt, i) => (
                 <button 
                   key={i}
                   onClick={() => handleSendMessage(opt)}
-                  className="bg-white border border-[#c5a572]/40 text-[#0f172a] text-[11px] font-semibold px-4 py-2.5 rounded-full shadow-sm hover:bg-[#0f172a] hover:text-[#c5a572] hover:border-[#0f172a] transition-all active:scale-95"
+                  className="bg-white border border-[#c5a572]/40 text-[#0f172a] text-[11px] font-semibold px-4 py-2 rounded-full shadow-sm hover:bg-[#0f172a] hover:text-[#c5a572] transition-all"
                 >
                   {opt}
                 </button>
@@ -144,10 +140,12 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <div className={`px-4 transition-all duration-500 ${isFinalized ? 'max-h-24 py-3 border-t bg-white' : 'max-h-0 py-0 overflow-hidden'}`}>
-        <button onClick={openWhatsApp} className="w-full gold-gradient text-[#0f172a] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg active:scale-95">
+      {/* BOTÃO WHATSAPP - APARECE NO FINAL OU SE DER ERRO */}
+      <div className={`px-4 transition-all duration-500 ${(isFinalized || hasError) ? 'max-h-32 py-4 border-t bg-white shadow-inner' : 'max-h-0 py-0 overflow-hidden'}`}>
+        {hasError && <p className="text-[10px] text-red-500 mb-2 font-bold text-center uppercase tracking-tighter">O sistema está instável. Clique abaixo para falar direto no WhatsApp.</p>}
+        <button onClick={openWhatsApp} className={`w-full ${hasError ? 'bg-green-600' : 'gold-gradient'} text-white font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg active:scale-95 transition-all`}>
           <i className="fa-brands fa-whatsapp text-lg"></i>
-          <span className="uppercase tracking-wider text-[11px]">Conectar com Bruno Hamawaki</span>
+          <span className="uppercase tracking-wider text-[11px]">Falar com Bruno Hamawaki</span>
         </button>
       </div>
 
@@ -157,11 +155,11 @@ const App: React.FC = () => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isFinalized ? "Triagem concluída." : "Escolha uma opção ou escreva..."}
-            disabled={status === AppStatus.LOADING || isFinalized}
+            placeholder={(isFinalized || hasError) ? "Atendimento via WhatsApp." : "Escreva aqui..."}
+            disabled={status === AppStatus.LOADING || isFinalized || hasError}
             className="flex-1 py-2 bg-transparent text-sm text-[#0f172a] outline-none"
           />
-          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized} className={`w-8 h-8 rounded-lg flex items-center justify-center ${!input.trim() || status === AppStatus.LOADING || isFinalized ? 'text-slate-300' : 'bg-[#0f172a] text-[#c5a572]'}`}>
+          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized || hasError} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${!input.trim() || status === AppStatus.LOADING || isFinalized || hasError ? 'text-slate-300' : 'bg-[#0f172a] text-[#c5a572]'}`}>
             <i className="fa-solid fa-paper-plane text-[10px]"></i>
           </button>
         </form>
