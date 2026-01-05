@@ -16,7 +16,7 @@ const App: React.FC = () => {
 
   const initChat = async () => {
     setStatus(AppStatus.LOADING);
-    const response = await geminiService.sendMessage("Iniciando atendimento virtual para triagem.");
+    const response = await geminiService.sendMessage("Iniciando triagem premium.");
     setMessages([{ role: 'model', text: response, timestamp: new Date() }]);
     setStatus(AppStatus.IDLE);
   };
@@ -41,7 +41,7 @@ const App: React.FC = () => {
     const response = await geminiService.sendMessage(textToSend);
     const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
     
-    if (response.includes("CONECTAR COM CONSULTOR") || response.includes("Bruno Hamawaki")) {
+    if (response.includes("CONECTAR COM CONSULTOR")) {
       setIsFinalized(true);
     }
 
@@ -49,41 +49,46 @@ const App: React.FC = () => {
     setStatus(AppStatus.IDLE);
   }, [input, status]);
 
-  // Lógica para mostrar opções: detecta se o robô perguntou como auxiliar hoje (após o nome)
-  const shouldShowOptions = () => {
-    if (messages.length === 0) return false;
-    const lastMsg = messages[messages.length - 1];
-    if (lastMsg.role !== 'model') return false;
-    const text = lastMsg.text.toLowerCase();
-    return (text.includes("como posso auxiliá-lo") || 
-            text.includes("escolha uma das opções") || 
-            text.includes("opções abaixo"));
+  // Função para extrair botões do texto da IA
+  const parseOptions = (text: string) => {
+    const options: string[] = [];
+    
+    // Procura por (A), (B), (C) ou 1., 2., 3. seguidos de texto
+    const regexOptions = /(?:\(|\b)([A-C1-5])(?:\.|\))\s*([^\n\r(]+)/gi;
+    let match;
+    while ((match = regexOptions.exec(text)) !== null) {
+      options.push(match[0].trim());
+    }
+
+    // Se não achou padrões complexos, busca palavras-chave simples
+    if (options.length === 0) {
+      if (text.toLowerCase().includes("sim") && text.toLowerCase().includes("não")) {
+        options.push("Sim", "Não");
+      }
+      if (text.toLowerCase().includes("1 ano") && text.toLowerCase().includes("3 anos")) {
+        options.push("1 ano", "3 anos", "5 anos");
+      }
+    }
+
+    return options;
   };
+
+  const currentOptions = messages.length > 0 && messages[messages.length - 1].role === 'model' 
+    ? parseOptions(messages[messages.length - 1].text) 
+    : [];
 
   const openWhatsApp = () => {
     let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
     summary += `------------------------------------\n`;
-    summary += `*Consultor:* ${ADMIN_NAME}\n`;
-    summary += `*Status:* Triagem Virtual Concluida\n\n`;
-    summary += `*DADOS DA TRIAGEM:*\n`;
+    summary += `*Consultor:* ${ADMIN_NAME}\n\n`;
     
     messages.forEach((msg, index) => {
-      if (index === 0) return; // Pula saudação técnica
-      if (msg.role === 'model') {
-        const clean = msg.text.split("CONECTAR COM CONSULTOR")[0].trim();
-        // Apenas adiciona perguntas relevantes, não textos de boas vindas longos
-        if (clean && !clean.includes("Agradeço") && clean.length > 5 && !clean.includes("Muito prazer")) {
-          const lines = clean.split('\n');
-          const lastQuestion = lines[lines.length - 1].trim();
-          summary += `\n*P:* ${lastQuestion || clean}\n`;
-        }
-      } else {
-        summary += `*R:* ${msg.text}\n`;
-      }
+      if (index === 0) return;
+      if (msg.role === 'user') summary += `*R:* ${msg.text}\n`;
     });
 
     summary += `\n------------------------------------\n`;
-    summary += `_Enviado via MKT Virtual Concierge_`;
+    summary += `_Triagem via MKT Concierge_`;
 
     const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
@@ -91,35 +96,21 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-200">
-      {/* Header Premium Compacto */}
       <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-3 flex items-center justify-between shrink-0 shadow-xl z-10">
         <div className="flex items-center space-x-3">
-          <div className="relative">
-            <div className="gold-gradient w-9 h-9 rounded-full flex items-center justify-center text-[#0f172a] shadow-lg border border-white/10">
-              <i className="fa-solid fa-crown text-sm"></i>
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-[#0f172a] rounded-full"></div>
+          <div className="gold-gradient w-9 h-9 rounded-full flex items-center justify-center text-[#0f172a]">
+            <i className="fa-solid fa-crown text-sm"></i>
           </div>
           <div>
-            <h1 className="text-white font-serif-premium text-base tracking-wide leading-tight">MKT-traducao</h1>
-            <p className="text-[#c5a572] text-[8px] uppercase tracking-[0.2em] font-bold">Virtual Concierge</p>
+            <h1 className="text-white font-serif-premium text-base">MKT-traducao</h1>
+            <p className="text-[#c5a572] text-[8px] uppercase tracking-widest font-bold">Virtual Concierge</p>
           </div>
         </div>
-        <button 
-          onClick={() => {
-            geminiService.reset();
-            setMessages([]);
-            setIsFinalized(false);
-            initChat();
-          }}
-          className="text-[#c5a572] hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5"
-          title="Reiniciar"
-        >
+        <button onClick={() => { geminiService.reset(); setMessages([]); setIsFinalized(false); initChat(); }} className="text-[#c5a572] hover:text-white transition-colors">
           <i className="fa-solid fa-arrow-rotate-left text-xs"></i>
         </button>
       </header>
 
-      {/* Área de Mensagens */}
       <main className="flex-1 overflow-hidden relative bg-[#fcfcfc]">
         <div ref={scrollRef} className="h-full overflow-y-auto px-3 py-6 space-y-4 no-scrollbar">
           {messages.map((msg, idx) => (
@@ -128,47 +119,18 @@ const App: React.FC = () => {
             </div>
           ))}
           
-          {shouldShowOptions() && status === AppStatus.IDLE && (
-            <div className="flex flex-col space-y-2 mt-4 px-1 animate-fade-in">
-              <button 
-                onClick={() => handleSendMessage("VISTO PERMANENTE")}
-                className="premium-card w-full p-3.5 rounded-xl flex items-center group border-l-4 border-l-[#c5a572] shadow-sm"
-              >
-                <div className="w-9 h-9 gold-gradient text-[#0f172a] rounded-lg flex items-center justify-center mr-3.5 shadow-inner">
-                  <i className="fa-solid fa-infinity text-base"></i>
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-[11px] uppercase tracking-wider">Visto Permanente</p>
-                  <p className="text-[9px] text-slate-500">Analise de Elegibilidade (Eijuu)</p>
-                </div>
-                <i className="fa-solid fa-star text-[#c5a572] text-[8px] animate-pulse"></i>
-              </button>
-
-              <button 
-                onClick={() => handleSendMessage("VISTO COMUM")}
-                className="premium-card w-full p-3.5 rounded-xl flex items-center group shadow-sm"
-              >
-                <div className="w-9 h-9 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center mr-3.5 group-hover:bg-[#0f172a] group-hover:text-[#c5a572] transition-colors">
-                  <i className="fa-solid fa-passport text-base"></i>
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-[11px] uppercase tracking-wider">Visto Comum</p>
-                  <p className="text-[9px] text-slate-500">Renovacoes e Alteracoes</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => handleSendMessage("CONSULADO")}
-                className="premium-card w-full p-3.5 rounded-xl flex items-center group shadow-sm"
-              >
-                <div className="w-9 h-9 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center mr-3.5 group-hover:bg-[#0f172a] group-hover:text-[#c5a572] transition-colors">
-                  <i className="fa-solid fa-building-columns text-base"></i>
-                </div>
-                <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-[11px] uppercase tracking-wider">Consulado</p>
-                  <p className="text-[9px] text-slate-500">Passaportes e Registros</p>
-                </div>
-              </button>
+          {/* BOTÕES DINÂMICOS */}
+          {!isFinalized && status === AppStatus.IDLE && currentOptions.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4 px-1 animate-fade-in ml-10">
+              {currentOptions.map((opt, i) => (
+                <button 
+                  key={i}
+                  onClick={() => handleSendMessage(opt)}
+                  className="bg-white border border-[#c5a572]/40 text-[#0f172a] text-[11px] font-semibold px-4 py-2.5 rounded-full shadow-sm hover:bg-[#0f172a] hover:text-[#c5a572] hover:border-[#0f172a] transition-all active:scale-95"
+                >
+                  {opt}
+                </button>
+              ))}
             </div>
           )}
 
@@ -182,45 +144,27 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Botão Finalizador - Foco no Bruno */}
-      <div className={`px-4 transition-all duration-500 ease-in-out ${isFinalized ? 'max-h-24 py-3 border-t border-slate-100 bg-white shadow-inner' : 'max-h-0 py-0 overflow-hidden'}`}>
-        <button 
-          onClick={openWhatsApp}
-          className="w-full gold-gradient hover:brightness-105 text-[#0f172a] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg active:scale-95 border border-[#0f172a]/10"
-        >
+      <div className={`px-4 transition-all duration-500 ${isFinalized ? 'max-h-24 py-3 border-t bg-white' : 'max-h-0 py-0 overflow-hidden'}`}>
+        <button onClick={openWhatsApp} className="w-full gold-gradient text-[#0f172a] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg active:scale-95">
           <i className="fa-brands fa-whatsapp text-lg"></i>
           <span className="uppercase tracking-wider text-[11px]">Conectar com Bruno Hamawaki</span>
         </button>
       </div>
 
-      {/* Footer / Input Compacto */}
       <footer className="p-3.5 bg-white border-t border-slate-100 shrink-0">
-        <form 
-          onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-          className="flex items-center bg-slate-50 rounded-xl px-4 py-1 border border-slate-200 focus-within:border-[#c5a572] focus-within:bg-white transition-all"
-        >
+        <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-center bg-slate-50 rounded-xl px-4 py-1 border border-slate-200 focus-within:border-[#c5a572] transition-all">
           <input 
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isFinalized ? "Triagem concluida." : "Escreva aqui..."}
+            placeholder={isFinalized ? "Triagem concluída." : "Escolha uma opção ou escreva..."}
             disabled={status === AppStatus.LOADING || isFinalized}
-            className="flex-1 py-2 bg-transparent text-sm text-[#0f172a] outline-none placeholder:text-slate-400"
+            className="flex-1 py-2 bg-transparent text-sm text-[#0f172a] outline-none"
           />
-          <button 
-            type="submit"
-            disabled={!input.trim() || status === AppStatus.LOADING || isFinalized}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all 
-              ${!input.trim() || status === AppStatus.LOADING || isFinalized
-                ? 'text-slate-300' 
-                : 'bg-[#0f172a] text-[#c5a572] shadow-sm'}`}
-          >
+          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized} className={`w-8 h-8 rounded-lg flex items-center justify-center ${!input.trim() || status === AppStatus.LOADING || isFinalized ? 'text-slate-300' : 'bg-[#0f172a] text-[#c5a572]'}`}>
             <i className="fa-solid fa-paper-plane text-[10px]"></i>
           </button>
         </form>
-        <div className="mt-2 text-center">
-            <p className="text-[7px] text-slate-400 font-bold uppercase tracking-[0.3em]">Excellence in Service</p>
-        </div>
       </footer>
     </div>
   );
