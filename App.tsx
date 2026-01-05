@@ -8,7 +8,6 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
-  const [showOptions, setShowOptions] = useState(false);
   const [isFinalized, setIsFinalized] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -17,10 +16,9 @@ const App: React.FC = () => {
 
   const initChat = async () => {
     setStatus(AppStatus.LOADING);
-    const response = await geminiService.sendMessage("Olá, iniciar atendimento");
+    const response = await geminiService.sendMessage("Olá, gostaria de iniciar meu atendimento personalizado.");
     setMessages([{ role: 'model', text: response, timestamp: new Date() }]);
     setStatus(AppStatus.IDLE);
-    setShowOptions(true);
   };
 
   useEffect(() => { initChat(); }, []);
@@ -39,7 +37,6 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setStatus(AppStatus.LOADING);
-    setShowOptions(false);
 
     const response = await geminiService.sendMessage(textToSend);
     const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
@@ -52,21 +49,30 @@ const App: React.FC = () => {
     setStatus(AppStatus.IDLE);
   }, [input, status]);
 
+  // Lógica para mostrar opções: se a última mensagem do modelo pergunta "Como posso auxiliá-lo hoje?"
+  const shouldShowOptions = () => {
+    if (messages.length === 0) return false;
+    const lastMsg = messages[messages.length - 1];
+    return lastMsg.role === 'model' && 
+           (lastMsg.text.includes("Como posso auxiliá-lo hoje?") || 
+            lastMsg.text.includes("escolha uma das opções"));
+  };
+
   const openWhatsApp = () => {
     let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
     summary += `------------------------------------\n`;
     summary += `*Consultor:* ${ADMIN_NAME}\n`;
     summary += `*Status:* Triagem Virtual Concluida\n\n`;
-    summary += `*DADOS COLETADOS:*\n`;
+    summary += `*DADOS DA TRIAGEM:*\n`;
     
     messages.forEach((msg, index) => {
       if (index === 0) return;
       if (msg.role === 'model') {
         const clean = msg.text.split("CONECTAR COM CONSULTOR")[0].trim();
         if (clean && !clean.includes("Agradeço") && clean.length > 5) {
-          // Extrai apenas a pergunta principal para o log
-          const lastQuestion = clean.split('\n').pop()?.replace(/[?]/g, '?') || clean;
-          summary += `\n*P:* ${lastQuestion}\n`;
+          const lines = clean.split('\n');
+          const lastLine = lines[lines.length - 1].trim();
+          summary += `\n*P:* ${lastLine || clean}\n`;
         }
       } else {
         summary += `*R:* ${msg.text}\n`;
@@ -119,7 +125,7 @@ const App: React.FC = () => {
             </div>
           ))}
           
-          {showOptions && status === AppStatus.IDLE && messages.length === 1 && (
+          {shouldShowOptions() && status === AppStatus.IDLE && (
             <div className="flex flex-col space-y-3 mt-4 px-2 animate-fade-in">
               <button 
                 onClick={() => handleSendMessage("VISTO PERMANENTE")}
