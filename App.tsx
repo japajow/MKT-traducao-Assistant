@@ -57,14 +57,16 @@ const App: React.FC = () => {
     summary += `------------------------------------\n`;
     summary += `*Consultor:* ${ADMIN_NAME}\n`;
     summary += `*Status:* Triagem Virtual Concluida\n\n`;
-    summary += `*HISTORICO DE ATENDIMENTO:*\n`;
+    summary += `*DADOS COLETADOS:*\n`;
     
     messages.forEach((msg, index) => {
       if (index === 0) return;
       if (msg.role === 'model') {
         const clean = msg.text.split("CONECTAR COM CONSULTOR")[0].trim();
-        if (clean && !clean.includes("Agradeço pelas informações") && !clean.includes("Agradeço imensamente")) {
-          summary += `\n*P:* ${clean}\n`;
+        if (clean && !clean.includes("Agradeço") && clean.length > 5) {
+          // Extrai apenas a pergunta principal para o log
+          const lastQuestion = clean.split('\n').pop()?.replace(/[?]/g, '?') || clean;
+          summary += `\n*P:* ${lastQuestion}\n`;
         }
       } else {
         summary += `*R:* ${msg.text}\n`;
@@ -72,7 +74,7 @@ const App: React.FC = () => {
     });
 
     summary += `\n------------------------------------\n`;
-    summary += `_Enviado via MKT Virtual Concierge_`;
+    summary += `_Protocolo MKT Virtual Concierge_`;
 
     const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
@@ -80,7 +82,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-200">
-      {/* Header Premium - Compactado */}
+      {/* Header Premium */}
       <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-3 flex items-center justify-between shrink-0 shadow-xl z-10">
         <div className="flex items-center space-x-3">
           <div className="relative">
@@ -102,13 +104,13 @@ const App: React.FC = () => {
             initChat();
           }}
           className="text-[#c5a572] hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5"
-          title="Reiniciar Atendimento"
+          title="Reiniciar"
         >
           <i className="fa-solid fa-arrow-rotate-left text-sm"></i>
         </button>
       </header>
 
-      {/* Área de Mensagens - Padding ajustado */}
+      {/* Área de Mensagens */}
       <main className="flex-1 overflow-hidden relative bg-[#fcfcfc]">
         <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-6 space-y-5 no-scrollbar">
           {messages.map((msg, idx) => (
@@ -120,31 +122,43 @@ const App: React.FC = () => {
           {showOptions && status === AppStatus.IDLE && messages.length === 1 && (
             <div className="flex flex-col space-y-3 mt-4 px-2 animate-fade-in">
               <button 
-                onClick={() => handleSendMessage("VISTO")}
+                onClick={() => handleSendMessage("VISTO PERMANENTE")}
+                className="premium-card w-full p-4 rounded-xl flex items-center group border-l-4 border-l-[#c5a572]"
+              >
+                <div className="w-10 h-10 gold-gradient text-[#0f172a] rounded-lg flex items-center justify-center mr-4 shadow-inner">
+                  <i className="fa-solid fa-infinity text-lg"></i>
+                </div>
+                <div className="text-left flex-1">
+                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Visto Permanente</p>
+                  <p className="text-[10px] text-slate-500">Analise de Elegibilidade (Eijuu)</p>
+                </div>
+                <i className="fa-solid fa-star text-[#c5a572] text-[10px] animate-pulse"></i>
+              </button>
+
+              <button 
+                onClick={() => handleSendMessage("VISTO COMUM")}
                 className="premium-card w-full p-4 rounded-xl flex items-center group"
               >
-                <div className="w-10 h-10 gold-gradient text-[#0f172a] rounded-lg flex items-center justify-center mr-4 shadow-inner transition-transform group-hover:scale-105">
+                <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center mr-4 group-hover:bg-[#0f172a] group-hover:text-[#c5a572] transition-colors">
                   <i className="fa-solid fa-passport text-lg"></i>
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Assessoria de Visto</p>
+                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Visto Comum</p>
                   <p className="text-[10px] text-slate-500">Renovacoes e Alteracoes</p>
                 </div>
-                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50 text-xs"></i>
               </button>
 
               <button 
                 onClick={() => handleSendMessage("CONSULADO")}
                 className="premium-card w-full p-4 rounded-xl flex items-center group"
               >
-                <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center mr-4 transition-all group-hover:bg-[#0f172a] group-hover:text-[#c5a572]">
+                <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-lg flex items-center justify-center mr-4 group-hover:bg-[#0f172a] group-hover:text-[#c5a572] transition-colors">
                   <i className="fa-solid fa-building-columns text-lg"></i>
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Servicos Consulares</p>
+                  <p className="font-bold text-[#0f172a] text-[12px] uppercase tracking-wider">Consulado</p>
                   <p className="text-[10px] text-slate-500">Passaportes e Registros</p>
                 </div>
-                <i className="fa-solid fa-chevron-right text-[#c5a572] opacity-50 text-xs"></i>
               </button>
             </div>
           )}
@@ -159,18 +173,18 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Botão Finalizador - Redimensionado para caber em widgets compactos */}
+      {/* Botão Finalizador */}
       <div className={`px-4 transition-all duration-500 ease-in-out ${isFinalized ? 'max-h-24 py-3 border-t border-slate-100 bg-white' : 'max-h-0 py-0 overflow-hidden'}`}>
         <button 
           onClick={openWhatsApp}
-          className="w-full gold-gradient hover:brightness-110 text-[#0f172a] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg transition-all active:scale-95 border border-[#0f172a]/10"
+          className="w-full gold-gradient hover:brightness-110 text-[#0f172a] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg active:scale-95 border border-[#0f172a]/10"
         >
           <i className="fa-brands fa-whatsapp text-xl"></i>
           <span className="uppercase tracking-wider text-[11px] sm:text-xs">Falar com Consultor Bruno</span>
         </button>
       </div>
 
-      {/* Footer / Input - Compactado */}
+      {/* Footer / Input */}
       <footer className="p-4 bg-white border-t border-slate-100 shrink-0">
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
