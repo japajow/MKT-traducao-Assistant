@@ -27,7 +27,7 @@ Passo 3: Lógica por Categoria
 2. Perguntas Específicas (UMA POR VEZ):
    - Se (A) [Cônjuge]: "Há quantos anos você está casado(a)?" (Requisito: 3 anos) -> "Há quantos anos você mora no Japão?" (Requisito: 1 ano).
    - Se (B) [Nissei/Sansei]: "Há quantos anos você mora no Japão ininterruptamente?" (Requisito: 5 anos).
-   - Se (C) [Trabalho]: "Há quantos anos você mora no Japão?" (Requisito: 10 anos, sendo 5 trabalhando).
+   - Se (C) [Trabalho]: "Há quantos anos você mora no Japão? (Lembrando que o requisito são 10 anos, sendo 5 trabalhando)".
 
 3. Perguntas Universais (Obrigatórias para todos do Permanente):
    - Validade do Visto: "Qual a validade do seu visto atual? (1, 3 ou 5 anos)". (Nota: Se for 1 ano, explique gentilmente que precisará renovar para 3 anos antes de pedir o permanente).
@@ -47,12 +47,18 @@ Assim que coletar os dados, diga exatamente:
 "Agradeço pelas informações. O seu relatório de triagem foi gerado. Para que o Consultor Bruno Hamawaki assuma sua assessoria agora mesmo, por favor, clique no botão 'CONECTAR COM CONSULTOR' abaixo."
 `;
 
+// Modelo alternativo para maior estabilidade em chaves gratuitas/trial
+const MODEL_NAME = 'gemini-flash-lite-latest';
+
 export class GeminiChatService {
   private chat: Chat | null = null;
   private ai: GoogleGenAI | null = null;
 
   constructor() {
-    // Inicialização segura
+    this.setupAI();
+  }
+
+  private setupAI() {
     const apiKey = process.env.API_KEY;
     if (apiKey) {
       this.ai = new GoogleGenAI({ apiKey });
@@ -63,7 +69,7 @@ export class GeminiChatService {
   private initChat() {
     if (!this.ai) return;
     this.chat = this.ai.chats.create({
-      model: 'gemini-3-flash-preview',
+      model: MODEL_NAME,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.3,
@@ -71,12 +77,14 @@ export class GeminiChatService {
     });
   }
 
-  async sendMessage(message: string): Promise<string> {
+  private async delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async sendMessage(message: string, retryCount = 0): Promise<string> {
     if (!this.ai) {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) return 'Erro: Chave de API não configurada.';
-      this.ai = new GoogleGenAI({ apiKey });
-      this.initChat();
+      this.setupAI();
+      if (!this.ai) return 'Erro: Chave de API não configurada corretamente.';
     }
     
     if (!this.chat) this.initChat();
@@ -86,10 +94,23 @@ export class GeminiChatService {
       return result.text || 'Lamentamos, a resposta está vazia.';
     } catch (error: any) {
       console.error("Gemini API Error:", error);
-      // Fallback para erros comuns
-      if (error.message?.includes("429")) return "O sistema está com alta demanda. Por favor, aguarde um instante.";
-      if (error.message?.includes("403") || error.message?.includes("401")) return "Erro de autenticação. Verifique a chave de API.";
-      return 'Dificuldades técnicas momentâneas. Por favor, tente novamente em instantes.';
+      const errorMessage = error.message || "";
+
+      // Lógica de Retentativa para Erro 429 (Limite de Taxa / Alta Demanda)
+      if (errorMessage.includes("429") && retryCount < 2) {
+        await this.delay(2000 * (retryCount + 1)); // Espera 2s depois 4s
+        return this.sendMessage(message, retryCount + 1);
+      }
+
+      if (errorMessage.includes("429")) {
+        return "O sistema está com muitos acessos simultâneos. Por favor, aguarde 30 segundos e envie sua mensagem novamente.";
+      }
+      
+      if (errorMessage.includes("403") || errorMessage.includes("401")) {
+        return "Erro de acesso. Por favor, contate o suporte técnico.";
+      }
+
+      return 'Dificuldades técnicas momentâneas. Por favor, tente enviar sua mensagem novamente.';
     }
   }
 
