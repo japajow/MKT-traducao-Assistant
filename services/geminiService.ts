@@ -1,17 +1,7 @@
-const RULES = `Você é o Virtual Concierge da MKT-traducao, consultoria sênior de vistos no Japão. 
-Regras: 1. Uma pergunta por vez. 2. Opções entre colchetes [Sim] [Não]. 
-Fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.`;
-
-// Usaremos os nomes EXATOS que você confirmou no seu painel
-const MODELS = [
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro-latest"
-];
+const RULES = `Você é o Concierge da MKT-traducao. Responda brevemente. Uma pergunta por vez. Opções em colchetes [Sim] [Não].`;
 
 export class GeminiChatService {
   private history: any[] = [];
-  private modelIndex = 0;
 
   constructor() {
     this.reset();
@@ -20,9 +10,7 @@ export class GeminiChatService {
   async sendMessage(userMessage: string): Promise<string> {
     const apiKey = import.meta.env.VITE_API_KEY;
 
-    if (!apiKey) {
-      return "ERRO_CRITICO: Chave de API não configurada na Vercel.";
-    }
+    if (!apiKey) return "ERRO: Configure a VITE_API_KEY na Vercel.";
 
     this.history.push({
       role: "user",
@@ -30,22 +18,19 @@ export class GeminiChatService {
     });
 
     try {
-      const modelName = MODELS[this.modelIndex];
-      
-      // MUDANÇA CRÍTICA: Usando v1beta explicitamente como o Google pediu no seu erro
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      // USANDO v1 (ESTÁVEL) e o modelo padrão absoluto
+      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: this.history,
-          // Movendo a instrução de sistema para o campo oficial do v1beta
           systemInstruction: {
             parts: [{ text: RULES }]
           },
           generationConfig: {
-            temperature: 0.3,
+            temperature: 0.5,
             maxOutputTokens: 800,
           }
         })
@@ -54,12 +39,11 @@ export class GeminiChatService {
       const data = await response.json();
 
       if (!response.ok) {
-        // Se o modelo "latest" falhar, tentamos o próximo modelo da lista
-        if (data.error?.status === "NOT_FOUND" && this.modelIndex < MODELS.length - 1) {
-            this.modelIndex++;
-            return this.sendMessage(userMessage);
+        // Se der 404 aqui, a chave está sem permissão no Google Cloud
+        if (response.status === 404) {
+            return "ERRO_CRITICO: O Google não reconheceu este modelo. Verifique se a API Generativa está ativa no seu console do Google Cloud.";
         }
-        throw new Error(data.error?.message || "Erro desconhecido");
+        throw new Error(data.error?.message || "Erro na API");
       }
 
       const botResponse = data.candidates[0].content.parts[0].text;
@@ -72,14 +56,13 @@ export class GeminiChatService {
       return botResponse;
 
     } catch (error: any) {
-      console.error("ERRO NO CONCIERGE:", error.message);
+      console.error("FALHA:", error.message);
       return `ERRO_CRITICO: ${error.message}`;
     }
   }
 
   reset() {
-    this.modelIndex = 0;
-    this.history = []; // No v1beta com systemInstruction, o histórico começa vazio
+    this.history = [];
   }
 }
 
