@@ -1,10 +1,12 @@
-const RULES = `Você é o Virtual Concierge da MKT-traducao. 
+const RULES = `Você é o Virtual Concierge da MKT-traducao, consultoria sênior de vistos no Japão. 
 Regras: 1. Uma pergunta por vez. 2. Opções entre colchetes [Sim] [Não]. 
 Fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.`;
 
+// Usaremos os nomes EXATOS que você confirmou no seu painel
 const MODELS = [
+  "gemini-1.5-flash-latest",
   "gemini-1.5-flash",
-  "gemini-1.5-pro"
+  "gemini-1.5-pro-latest"
 ];
 
 export class GeminiChatService {
@@ -19,10 +21,9 @@ export class GeminiChatService {
     const apiKey = import.meta.env.VITE_API_KEY;
 
     if (!apiKey) {
-      return "ERRO_CRITICO: Chave de API (VITE_API_KEY) não configurada na Vercel.";
+      return "ERRO_CRITICO: Chave de API não configurada na Vercel.";
     }
 
-    // Adiciona a mensagem do usuário ao histórico
     this.history.push({
       role: "user",
       parts: [{ text: userMessage }]
@@ -30,18 +31,22 @@ export class GeminiChatService {
 
     try {
       const modelName = MODELS[this.modelIndex];
-      // URL DIRETA DA API ESTÁVEL V1
-      const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
+      
+      // MUDANÇA CRÍTICA: Usando v1beta explicitamente como o Google pediu no seu erro
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: this.history,
+          // Movendo a instrução de sistema para o campo oficial do v1beta
+          systemInstruction: {
+            parts: [{ text: RULES }]
+          },
           generationConfig: {
-            temperature: 0.4,
-            topP: 0.8,
-            maxOutputTokens: 1000,
+            temperature: 0.3,
+            maxOutputTokens: 800,
           }
         })
       });
@@ -49,12 +54,16 @@ export class GeminiChatService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Erro na resposta do Google");
+        // Se o modelo "latest" falhar, tentamos o próximo modelo da lista
+        if (data.error?.status === "NOT_FOUND" && this.modelIndex < MODELS.length - 1) {
+            this.modelIndex++;
+            return this.sendMessage(userMessage);
+        }
+        throw new Error(data.error?.message || "Erro desconhecido");
       }
 
       const botResponse = data.candidates[0].content.parts[0].text;
 
-      // Adiciona a resposta do bot ao histórico para manter o contexto
       this.history.push({
         role: "model",
         parts: [{ text: botResponse }]
@@ -63,32 +72,14 @@ export class GeminiChatService {
       return botResponse;
 
     } catch (error: any) {
-      console.error("ERRO NA API DIRETA:", error.message);
-
-      // Se der erro 404 (Modelo não encontrado) ou 429 (Cota), tenta o próximo modelo
-      if ((error.message.includes("404") || error.message.includes("429")) && this.modelIndex < MODELS.length - 1) {
-        console.warn(`Tentando próximo modelo devido a erro: ${error.message}`);
-        this.modelIndex++;
-        return this.sendMessage(userMessage);
-      }
-
+      console.error("ERRO NO CONCIERGE:", error.message);
       return `ERRO_CRITICO: ${error.message}`;
     }
   }
 
   reset() {
     this.modelIndex = 0;
-    // Reinicia o histórico com as regras de negócio
-    this.history = [
-      {
-        role: "user",
-        parts: [{ text: `Instruções de Sistema: ${RULES}. Responda apenas: Olá! Sou seu Concierge Virtual. Qual seu nome completo?` }]
-      },
-      {
-        role: "model",
-        parts: [{ text: "Olá! Sou seu Concierge Virtual. Qual seu nome completo?" }]
-      }
-    ];
+    this.history = []; // No v1beta com systemInstruction, o histórico começa vazio
   }
 }
 
