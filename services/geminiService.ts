@@ -1,20 +1,21 @@
-import { GoogleGenAI, ChatSession } from "@google/generative-ai";
+import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 
 const SYSTEM_INSTRUCTION = `
-Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é de alta costura: formal, breve e impecável.
+Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é sênior, formal e breve.
 
 REGRAS CRÍTICAS:
 1. FAÇA APENAS UMA PERGUNTA POR VEZ.
-2. SEMPRE coloque as opções entre colchetes. Exemplo: [Sim] [Não].
-3. Se o usuário digitar algo fora das opções, peça gentilmente para escolher uma.
+2. NUNCA use listas numeradas ou letras para opções.
+3. SEMPRE coloque as opções entre colchetes. Exemplo: [Sim] [Não].
+4. Se o usuário fugir do assunto, peça gentilmente para escolher uma das opções.
 
 FLUXO PADRONIZADO:
 Passo 1: Nome Completo.
 Passo 2: Intenção: [Visto Permanente] [Visto Comum] [Consulado].
-Passo 3: Serviço Específico.
+Passo 3: Serviço Específico dentro da escolha anterior.
 Passo 4: Situação Atual.
-Passo 5: Cidade no Japão.
-Passo 6: Finalização com a frase: CONECTAR COM CONSULTOR.
+Passo 5: Província/Cidade de residência.
+Passo 6: Finalização.
 
 FINALIZAÇÃO:
 Diga exatamente: "Agradeço pelas informações. O seu relatório de triagem foi gerado. Para que o Consultor Bruno Hamawaki assuma sua assessoria agora mesmo, por favor, clique no botão 'CONECTAR COM CONSULTOR' abaixo."
@@ -28,7 +29,7 @@ const MODELS = [
 
 export class GeminiChatService {
   private chat: ChatSession | null = null;
-  private ai: GoogleGenAI | null = null;
+  private ai: GoogleGenerativeAI | null = null;
   private modelIndex = 0;
 
   constructor() {
@@ -36,10 +37,9 @@ export class GeminiChatService {
   }
 
   private setupAI() {
-    // Para VITE e VERCEL, usamos import.meta.env
     const apiKey = import.meta.env.VITE_API_KEY;
     if (apiKey) {
-      this.ai = new GoogleGenAI(apiKey);
+      this.ai = new GoogleGenerativeAI(apiKey);
       this.initChat();
     }
   }
