@@ -28,7 +28,7 @@ export class GeminiChatService {
 
   private setupAI() {
     // PADRÃO VITE: usa VITE_API_KEY
-    const apiKey = import.meta.env.VITE_API_KEY;
+    const apiKey = import.meta.env.API_KEY;
     if (apiKey) {
       this.ai = new GoogleGenerativeAI(apiKey);
       this.initChat();
