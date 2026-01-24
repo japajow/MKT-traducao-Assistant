@@ -3,7 +3,7 @@ import { Message, AppStatus } from './types';
 import { geminiService } from './services/geminiService';
 import ChatMessage from './components/ChatMessage';
 
-const STORAGE_KEY = 'mkt_concierge_cache_v1';
+const STORAGE_KEY = 'mkt_cache_v2_stable';
 
 const parseOptions = (text: string) => {
   const options: string[] = [];
@@ -30,18 +30,15 @@ const App: React.FC = () => {
 
   const ADMIN_PHONE = "817091225330";
 
-  // Salva o estado atual com segurança
-  const saveToStorage = (msgs: Message[], finalized: boolean) => {
+  const saveToStorage = (msgs: Message[], finalized: boolean, error: boolean) => {
     try {
-      const data = JSON.stringify({
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
         messages: msgs,
         isFinalized: finalized,
-        lastUpdate: new Date().getTime()
-      });
-      localStorage.setItem(STORAGE_KEY, data);
-    } catch (e) {
-      console.error("Erro ao salvar no storage", e);
-    }
+        hasError: error,
+        timestamp: new Date().getTime()
+      }));
+    } catch (e) { console.error(e); }
   };
 
   const handleReset = () => {
@@ -59,51 +56,22 @@ const App: React.FC = () => {
     const newMsg: Message = { role: 'model', text: response, timestamp: new Date() };
     setMessages([newMsg]);
     setStatus(AppStatus.IDLE);
-    saveToStorage([newMsg], false);
+    saveToStorage([newMsg], false, false);
   };
 
-  // EFEITO DE CARREGAMENTO INICIAL (BLINDADO)
   useEffect(() => {
-    const loadData = () => {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) {
-        initChat();
-        return;
-      }
-
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed.messages)) {
-          // Converte as strings de volta para objetos Date (evita tela branca)
-          const validMessages = parsed.messages.map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp)
-          }));
-          
-          setMessages(validMessages);
-          setIsFinalized(parsed.isFinalized);
-
-          // Se já finalizou, verifica se precisa mandar a mensagem de boas-vindas novamente
-          if (parsed.isFinalized && validMessages[validMessages.length - 1].text.indexOf("Nova Dúvida") === -1) {
-            const welcomeMsg: Message = {
-              role: 'model',
-              text: "Seja bem-vindo de volta! Gostaria de revisar algo ou tem uma [Nova Dúvida]?",
-              timestamp: new Date()
-            };
-            const updated = [...validMessages, welcomeMsg];
-            setMessages(updated);
-            saveToStorage(updated, true);
-          }
-        } else {
-          initChat();
-        }
-      } catch (e) {
-        console.error("Erro ao carregar cache. Resetando...");
-        handleReset();
-      }
-    };
-
-    loadData();
+        const validMsgs = parsed.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+        setMessages(validMsgs);
+        setIsFinalized(parsed.isFinalized || false);
+        setHasError(parsed.hasError || false);
+      } catch (e) { handleReset(); }
+    } else {
+      initChat();
+    }
   }, []);
 
   useEffect(() => {
@@ -114,14 +82,13 @@ const App: React.FC = () => {
 
   const handleSendMessage = useCallback(async (textOverride?: string) => {
     const textToSend = textOverride || input;
-    if (!textToSend.trim() || status === AppStatus.LOADING) return;
+    if (!textToSend.trim() || status === AppStatus.LOADING || hasError) return;
 
     if (textToSend === "Nova Dúvida") {
       handleReset();
       return;
     }
 
-    setHasError(false);
     const userMsg: Message = { role: 'user', text: textToSend, timestamp: new Date() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -130,23 +97,36 @@ const App: React.FC = () => {
 
     const response = await geminiService.sendMessage(textToSend);
 
+    // SE DER ERRO, TRAVA O CHAT E ABRE O WHATSAPP
     if (response.startsWith("ERRO_CRITICO")) {
       setHasError(true);
-      const errorMsg: Message = { role: 'model', text: "Desculpe, tive um problema técnico. Vamos continuar pelo WhatsApp?", timestamp: new Date() };
+      const errorMsg: Message = { 
+        role: 'model', 
+        text: "⚠️ Identifiquei uma instabilidade técnica. Para não atrasar seu atendimento, vamos continuar agora mesmo pelo WhatsApp com o consultor Bruno.", 
+        timestamp: new Date() 
+      };
       const finalMsgs = [...newMessages, errorMsg];
       setMessages(finalMsgs);
-      saveToStorage(finalMsgs, false);
+      saveToStorage(finalMsgs, false, true);
     } else {
-      let isNowFinalized = isFinalized || response.includes("CONECTAR COM CONSULTOR");
+      const isNowFinalized = isFinalized || response.includes("CONECTAR COM CONSULTOR");
       const modelMsg: Message = { role: 'model', text: response, timestamp: new Date() };
       const finalMsgs = [...newMessages, modelMsg];
       setMessages(finalMsgs);
       setIsFinalized(isNowFinalized);
-      saveToStorage(finalMsgs, isNowFinalized);
+      saveToStorage(finalMsgs, isNowFinalized, false);
     }
-
     setStatus(AppStatus.IDLE);
-  }, [input, status, messages, isFinalized]);
+  }, [input, status, messages, isFinalized, hasError]);
+
+  const openWhatsApp = () => {
+    const summary = messages
+      .filter(m => m.role === 'user')
+      .map(m => `*R:* ${m.text}`)
+      .join('\n');
+    const text = encodeURIComponent(`*MKT TRADUÇÃO - SOLICITAÇÃO PREMIUM*\n\n${summary}\n\n_Vindo do assistente virtual._`);
+    window.open(`https://wa.me/${ADMIN_PHONE}?text=${text}`, '_blank');
+  };
 
   const currentOptions = messages.length > 0 && messages[messages.length - 1].role === 'model'
     ? parseOptions(messages[messages.length - 1].text)
@@ -157,14 +137,14 @@ const App: React.FC = () => {
       <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-4 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center space-x-3">
           <div className="gold-gradient w-9 h-9 rounded-full flex items-center justify-center text-[#0f172a] shadow-lg">
-            <i className="fa-solid fa-crown text-sm"></i>
+            <i className="fa-solid fa-crown text-xs"></i>
           </div>
           <div>
             <h1 className="text-white font-serif text-base font-bold tracking-tight">MKT Concierge</h1>
-            <p className="text-[#c5a572] text-[8px] uppercase tracking-[3px] font-black opacity-80">AI Intelligent Service</p>
+            <p className="text-[#c5a572] text-[8px] uppercase tracking-[3px] font-black opacity-80">Premium Service</p>
           </div>
         </div>
-        <button onClick={handleReset} title="Reiniciar" className="text-[#c5a572] hover:bg-white/10 p-2 rounded-full transition-all">
+        <button onClick={handleReset} className="text-[#c5a572] hover:bg-white/10 p-2 rounded-full transition-all">
           <i className="fa-solid fa-rotate-right text-sm"></i>
         </button>
       </header>
@@ -173,23 +153,15 @@ const App: React.FC = () => {
         <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-6 space-y-6 no-scrollbar">
           {messages.map((msg, idx) => (
             <div key={idx} className="message-appear">
-              <ChatMessage
-                message={{
-                  ...msg,
-                  text: msg.role === 'model' ? cleanText(msg.text) : msg.text
-                }}
-              />
+              <ChatMessage message={{ ...msg, text: msg.role === 'model' ? cleanText(msg.text) : msg.text }} />
             </div>
           ))}
 
-          {status === AppStatus.IDLE && currentOptions.length > 0 && (
+          {/* SÓ MOSTRA OPÇÕES SE NÃO TIVER ERRO */}
+          {!hasError && status === AppStatus.IDLE && currentOptions.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4 px-1 animate-fade-in ml-10">
               {currentOptions.map((opt, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSendMessage(opt)}
-                  className="bg-white border-2 border-[#c5a572]/30 text-[#0f172a] text-[12px] font-bold px-5 py-2.5 rounded-full shadow-md hover:bg-[#0f172a] hover:text-[#c5a572] hover:border-[#0f172a] transition-all transform active:scale-95 shadow-[#c5a572]/5"
-                >
+                <button key={i} onClick={() => handleSendMessage(opt)} className="bg-white border-2 border-[#c5a572]/30 text-[#0f172a] text-[12px] font-bold px-5 py-2.5 rounded-full shadow-md hover:bg-[#0f172a] hover:text-[#c5a572] transition-all active:scale-95">
                   {opt}
                 </button>
               ))}
@@ -206,13 +178,11 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <div className={`px-4 bg-white transition-all duration-500 overflow-hidden ${isFinalized ? 'max-h-32 py-4 border-t border-slate-100' : 'max-h-0'}`}>
-        <button onClick={() => {
-            const summary = messages.filter(m => m.role === 'user').map(m => `*R:* ${m.text}`).join('\n');
-            window.open(`https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent("*MKT TRADUÇÃO - TRIAGEM*\n\n" + summary)}`, '_blank');
-        }} className="w-full gold-gradient text-[#0f172a] font-black py-4 rounded-2xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-all uppercase text-[11px] tracking-widest">
-          <i className="fa-brands fa-whatsapp text-xl"></i>
-          <span>Falar com Bruno Hamawaki</span>
+      {/* BOTÃO WHATSAPP - APARECE NO ERRO OU NA FINALIZAÇÃO */}
+      <div className={`px-4 bg-white transition-all duration-500 overflow-hidden ${(isFinalized || hasError) ? 'max-h-40 py-4 border-t' : 'max-h-0'}`}>
+        <button onClick={openWhatsApp} className={`w-full ${hasError ? 'bg-green-600 shadow-green-200' : 'gold-gradient shadow-[#c5a572]/20'} text-[#0f172a] font-black py-4 rounded-2xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-all uppercase text-[11px] tracking-widest`}>
+          <i className="fa-brands fa-whatsapp text-xl text-[#0f172a]"></i>
+          <span>{hasError ? 'Falar no WhatsApp Agora' : 'Conectar com Bruno Hamawaki'}</span>
         </button>
       </div>
 
@@ -222,11 +192,11 @@ const App: React.FC = () => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isFinalized ? "Triagem finalizada..." : "Escreva sua mensagem..."}
-            disabled={status === AppStatus.LOADING || isFinalized}
-            className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none"
+            placeholder={hasError ? "Erro técnico. Use o botão acima." : isFinalized ? "Triagem finalizada." : "Digite sua mensagem..."}
+            disabled={status === AppStatus.LOADING || isFinalized || hasError}
+            className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none disabled:cursor-not-allowed"
           />
-          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-[#0f172a] text-[#c5a572] disabled:opacity-10 shadow-lg">
+          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized || hasError} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-[#0f172a] text-[#c5a572] disabled:opacity-10 shadow-lg">
             <i className="fa-solid fa-paper-plane text-xs"></i>
           </button>
         </form>
