@@ -1,8 +1,23 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, AppStatus } from './types';
 import { geminiService } from './services/geminiService';
 import ChatMessage from './components/ChatMessage';
+
+// --- FUNÇÕES AUXILIARES (DEFINIDAS FORA DO COMPONENTE PARA EVITAR ERROS) ---
+const parseOptions = (text: string) => {
+  const options: string[] = [];
+  const regex = /\[([^\]]+)\]/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    options.push(match[1].trim());
+  }
+  return options;
+};
+
+const cleanText = (text: string) => {
+  // Remove o conteúdo entre colchetes e os próprios colchetes para o usuário não ver
+  return text.replace(/\[([^\]]+)\]/g, '').trim();
+};
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -13,7 +28,6 @@ const App: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ADMIN_PHONE = "817091225330";
-  const ADMIN_NAME = "Bruno Hamawaki";
 
   const initChat = async () => {
     setStatus(AppStatus.LOADING);
@@ -58,21 +72,7 @@ const App: React.FC = () => {
     setStatus(AppStatus.IDLE);
   }, [input, status]);
 
-  const parseOptions = (text: string) => {
-    const options: string[] = [];
-    const regexOptions = /(?:\(|\b)([A-D1-5])(?:\.|\))\s*([^\n\r(]+)/gi;
-    let match;
-    while ((match = regexOptions.exec(text)) !== null) {
-      options.push(match[0].trim());
-    }
-    if (options.length === 0) {
-      const low = text.toLowerCase();
-      if (low.includes("sim") && low.includes("não")) options.push("Sim", "Não");
-      if (low.includes("1 ano") && low.includes("3 anos")) options.push("1 ano", "3 anos", "5 anos");
-    }
-    return options;
-  };
-
+  // Pega as opções da última mensagem do robô
   const currentOptions = messages.length > 0 && messages[messages.length - 1].role === 'model'
     ? parseOptions(messages[messages.length - 1].text)
     : [];
@@ -80,25 +80,22 @@ const App: React.FC = () => {
   const openWhatsApp = () => {
     let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
     summary += `------------------------------------\n`;
-    summary += `*Status:* ${hasError ? 'Contingencia por Erro' : 'Triagem Concluida'}\n\n`;
-
     messages.forEach((msg) => {
       if (msg.role === 'user') summary += `*R:* ${msg.text}\n`;
     });
-
     const url = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(summary)}`;
     window.open(url, '_blank');
   };
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-200">
-      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-3 flex items-center justify-between shrink-0 shadow-xl z-10">
+      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-3 flex items-center justify-between shrink-0 z-10">
         <div className="flex items-center space-x-3">
           <div className="gold-gradient w-9 h-9 rounded-full flex items-center justify-center text-[#0f172a]">
             <i className="fa-solid fa-crown text-sm"></i>
           </div>
           <div>
-            <h1 className="text-white font-serif-premium text-base">MKT-traducao</h1>
+            <h1 className="text-white font-serif text-base font-bold">MKT-traducao</h1>
             <p className="text-[#c5a572] text-[8px] uppercase tracking-widest font-bold">Virtual Concierge</p>
           </div>
         </div>
@@ -111,7 +108,6 @@ const App: React.FC = () => {
         <div ref={scrollRef} className="h-full overflow-y-auto px-3 py-6 space-y-4 no-scrollbar">
           {messages.map((msg, idx) => (
             <div key={idx} className="message-appear">
-              {/* Use uma versão limpa do texto para o balão */}
               <ChatMessage
                 message={{
                   ...msg,
@@ -121,7 +117,7 @@ const App: React.FC = () => {
             </div>
           ))}
 
-          {/* BOTÕES DINÂMICOS - Agora muito mais precisos */}
+          {/* BOTÕES DE OPÇÃO */}
           {!isFinalized && !hasError && status === AppStatus.IDLE && currentOptions.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4 px-1 animate-fade-in ml-10">
               {currentOptions.map((opt, i) => (
@@ -146,9 +142,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* BOTÃO WHATSAPP - APARECE NO FINAL OU SE DER ERRO */}
-      <div className={`px-4 transition-all duration-500 ${(isFinalized || hasError) ? 'max-h-32 py-4 border-t bg-white shadow-inner' : 'max-h-0 py-0 overflow-hidden'}`}>
-        {hasError && <p className="text-[10px] text-red-500 mb-2 font-bold text-center uppercase tracking-tighter">O sistema está instável. Clique abaixo para falar direto no WhatsApp.</p>}
+      <div className={`px-4 transition-all duration-500 ${(isFinalized || hasError) ? 'max-h-32 py-4 border-t bg-white' : 'max-h-0 py-0 overflow-hidden'}`}>
         <button onClick={openWhatsApp} className={`w-full ${hasError ? 'bg-green-600' : 'gold-gradient'} text-white font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg active:scale-95 transition-all`}>
           <i className="fa-brands fa-whatsapp text-lg"></i>
           <span className="uppercase tracking-wider text-[11px]">Falar com Bruno Hamawaki</span>
