@@ -1,24 +1,19 @@
 import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 
-const SYSTEM_INSTRUCTION = `
-Você é o "Virtual Concierge" da MKT-traducao, consultoria sênior de vistos no Japão.
-TOM DE VOZ: Formal, breve e luxuoso.
-REGRAS: 
-1. Faça apenas UMA pergunta por vez. 
-2. Use colchetes para opções: [Sim] [Não].
-3. SEMPRE siga o fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.
-`;
+// Definimos a instrução apenas como uma string comum
+const RULES = `Sou o Virtual Concierge da MKT-traducao. 
+Regras: 1. Uma pergunta por vez. 2. Opções entre colchetes [Sim] [Não]. 
+Fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.`;
 
-const AVAILABLE_MODELS = [
+const MODELS = [
   'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-1.0-pro'
+  'gemini-1.5-pro'
 ];
 
 export class GeminiChatService {
   private chat: ChatSession | null = null;
   private ai: GoogleGenerativeAI | null = null;
-  private currentModelIndex = 0;
+  private modelIndex = 0;
 
   constructor() {
     this.setupAI();
@@ -35,39 +30,36 @@ export class GeminiChatService {
   private initChat() {
     if (!this.ai) return;
     
-    const modelName = AVAILABLE_MODELS[this.currentModelIndex];
-    console.log(`🤖 Conectando ao modelo estável: ${modelName}`);
-
     try {
-      // Removemos o systemInstruction daqui para evitar o erro 400
-      const model = this.ai.getGenerativeModel({ model: modelName });
+      // CHAMADA MAIS SIMPLES POSSÍVEL: Apenas o nome do modelo
+      const model = this.ai.getGenerativeModel({ model: MODELS[this.modelIndex] });
 
-      // Injetamos a regra DIRETO no histórico inicial
+      // Passamos as instruções como a PRIMEIRA mensagem da conversa (role: user/model)
+      // Isso evita o erro de "systemInstruction" desconhecido na API v1
       this.chat = model.startChat({
         history: [
           {
             role: "user",
-            parts: [{ text: `Instruções Críticas: ${SYSTEM_INSTRUCTION}. Responda apenas "Entendido, sou seu Concierge Virtual. Como posso ajudar?".` }],
+            parts: [{ text: `Instruções de operação: ${RULES}. Responda apenas "Olá! Sou seu Concierge Virtual. Qual seu nome completo?"` }],
           },
           {
             role: "model",
-            parts: [{ text: "Entendido, sou seu Concierge Virtual. Como posso ajudar?" }],
-          },
+            parts: [{ text: "Olá! Sou seu Concierge Virtual. Qual seu nome completo?" }],
+          }
         ],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 1000,
         },
       });
     } catch (e) {
-      console.error("Erro ao iniciar chat:", e);
+      console.error("Erro ao iniciar:", e);
     }
   }
 
   async sendMessage(message: string): Promise<string> {
     if (!this.ai || !this.chat) {
       this.setupAI();
-      if (!this.ai) return 'ERRO_CRITICO: Chave de API não configurada.';
+      if (!this.ai) return 'ERRO_CRITICO: Chave de API ausente.';
     }
 
     try {
@@ -75,22 +67,20 @@ export class GeminiChatService {
       const response = await result.response;
       return response.text();
     } catch (error: any) {
-      const msg = error.message || "";
-      console.error("Erro detalhado:", msg);
+      console.error("ERRO NA API:", error.message);
       
-      // Fallback para o próximo modelo se o atual falhar
-      if (this.currentModelIndex < AVAILABLE_MODELS.length - 1) {
-        this.currentModelIndex++;
+      // Se falhar, tenta o próximo modelo (ex: pula do flash para o pro)
+      if (this.modelIndex < MODELS.length - 1) {
+        this.modelIndex++;
         this.initChat();
         return this.sendMessage(message);
       }
-
-      return 'ERRO_CRITICO: Instabilidade técnica nos serviços de IA.';
+      return 'ERRO_CRITICO: Instabilidade técnica.';
     }
   }
 
   reset() {
-    this.currentModelIndex = 0;
+    this.modelIndex = 0;
     this.initChat();
   }
 }
