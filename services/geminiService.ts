@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Chat } from "@google/genai";
 
 const SYSTEM_INSTRUCTION = `
@@ -13,13 +12,8 @@ REGRAS CRÍTICAS:
 FLUXO PADRONIZADO PARA TODOS OS SERVIÇOS:
 Passo 1: Saudação e pedir Nome Completo.
 Passo 2: Perguntar qual a intenção principal: [Visto Permanente] [Visto Comum] [Consulado].
-Passo 3: Perguntar o Serviço Específico dentro da escolha:
-   - Se Permanente: [Cônjuge de Japonês] [Descendente] [Trabalho/Longa Permanência]
-   - Se Comum: [Renovação de Visto] [Troca de Categoria] [Certificado de Elegibilidade]
-   - Se Consulado: [Passaporte] [Registro Civil] [Procuração/Outros]
-Passo 4: Perguntar a "Situação Atual":
-   - Se Visto: [Tenho 1 ano] [Tenho 3 anos] [Tenho 5 anos]
-   - Se Consulado: [Já tenho os documentos] [Não sei quais documentos preciso]
+Passo 3: Perguntar o Serviço Específico dentro da escolha.
+Passo 4: Perguntar a "Situação Atual".
 Passo 5: Perguntar a Província/Cidade onde reside no Japão.
 Passo 6: Finalização.
 
@@ -27,18 +21,25 @@ FINALIZAÇÃO:
 Diga exatamente: "Agradeço pelas informações. O seu relatório de triagem foi gerado. Para que o Consultor Bruno Hamawaki assuma sua assessoria agora mesmo, por favor, clique no botão 'CONECTAR COM CONSULTOR' abaixo."
 `;
 
-const MODEL_NAME = 'gemini-flash-lite-latest';
+// LISTA DE MODELOS POR ORDEM DE PRIORIDADE
+const AVAILABLE_MODELS = [
+  'gemini-1.5-flash-latest', // 1º: Mais rápido e estável
+  'gemini-1.5-flash',        // 2º: Alternativa direta
+  'gemini-1.5-pro-latest',   // 3º: Mais inteligente (porém mais lento/caro)
+  'gemini-1.0-pro'           // 4º: Último recurso
+];
 
 export class GeminiChatService {
   private chat: Chat | null = null;
   private ai: GoogleGenAI | null = null;
+  private currentModelIndex = 0; // Começa pelo primeiro da lista
 
   constructor() {
     this.setupAI();
   }
 
   private setupAI() {
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_API_KEY;
     if (apiKey) {
       this.ai = new GoogleGenAI({ apiKey });
       this.initChat();
@@ -47,11 +48,16 @@ export class GeminiChatService {
 
   private initChat() {
     if (!this.ai) return;
+    
+    // Pega o modelo baseado no índice atual
+    const modelName = AVAILABLE_MODELS[this.currentModelIndex];
+    console.log(`🤖 Iniciando chat com modelo: ${modelName}`);
+
     this.chat = this.ai.chats.create({
-      model: MODEL_NAME,
+      model: modelName,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.2, // Menor temperatura para evitar respostas misturadas
+        temperature: 0.2,
       },
     });
   }
@@ -60,11 +66,12 @@ export class GeminiChatService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async sendMessage(message: string, retryCount = 0): Promise<string> {
+  async sendMessage(message: string): Promise<string> {
     if (!this.ai) {
       this.setupAI();
       if (!this.ai) return 'ERRO_CRITICO: Chave de API não configurada.';
     }
+    
     if (!this.chat) this.initChat();
 
     try {
@@ -72,15 +79,29 @@ export class GeminiChatService {
       return result.text || '';
     } catch (error: any) {
       const errorMessage = error.message || "";
-      if (errorMessage.includes("429") && retryCount < 2) {
-        await this.delay(2000);
-        return this.sendMessage(message, retryCount + 1);
+      
+      // Se o erro for limite de cota (429) ou erro interno do servidor (500)
+      if (errorMessage.includes("429") || errorMessage.includes("500") || errorMessage.includes("503")) {
+        
+        // Verifica se ainda temos modelos na lista para tentar
+        if (this.currentModelIndex < AVAILABLE_MODELS.length - 1) {
+          this.currentModelIndex++; // Pula para o próximo modelo
+          console.warn(`⚠️ Limite atingido no modelo anterior. Trocando para: ${AVAILABLE_MODELS[this.currentModelIndex]}`);
+          
+          this.initChat(); // Reinicia o chat com o novo modelo
+          await this.delay(1000); // Espera 1 segundo
+          return this.sendMessage(message); // Tenta enviar a mensagem novamente
+        }
       }
-      return 'ERRO_CRITICO: Dificuldades técnicas momentâneas. Por favor, tente enviar novamente ou fale diretamente com o consultor.';
+
+      // Se todos os modelos falharem, retorna o erro crítico que o App.tsx já sabe tratar
+      console.error("❌ Todos os modelos falharam.");
+      return 'ERRO_CRITICO: Instabilidade em todos os serviços de IA.';
     }
   }
 
   reset() {
+    this.currentModelIndex = 0; // Volta para o modelo mais rápido no reset
     this.initChat();
   }
 }
