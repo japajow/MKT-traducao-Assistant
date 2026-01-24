@@ -1,92 +1,94 @@
-import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
-
 const RULES = `Você é o Virtual Concierge da MKT-traducao. 
 Regras: 1. Uma pergunta por vez. 2. Opções entre colchetes [Sim] [Não]. 
 Fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.`;
 
-// Usando os nomes que você confirmou no Google AI Studio
 const MODELS = [
   "gemini-1.5-flash",
   "gemini-1.5-pro"
 ];
 
 export class GeminiChatService {
-  private chat: ChatSession | null = null;
-  private ai: GoogleGenerativeAI | null = null;
+  private history: any[] = [];
   private modelIndex = 0;
 
   constructor() {
-    this.setupAI();
+    this.reset();
   }
 
-  private setupAI() {
+  async sendMessage(userMessage: string): Promise<string> {
     const apiKey = import.meta.env.VITE_API_KEY;
-    if (apiKey) {
-      this.ai = new GoogleGenerativeAI(apiKey);
-      this.initChat();
-    }
-  }
 
-  private initChat() {
-    if (!this.ai) return;
-    
+    if (!apiKey) {
+      return "ERRO_CRITICO: Chave de API (VITE_API_KEY) não configurada na Vercel.";
+    }
+
+    // Adiciona a mensagem do usuário ao histórico
+    this.history.push({
+      role: "user",
+      parts: [{ text: userMessage }]
+    });
+
     try {
       const modelName = MODELS[this.modelIndex];
-      console.log(`📡 Tentando conexão ESTÁVEL (v1) com: ${modelName}`);
+      // URL DIRETA DA API ESTÁVEL V1
+      const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
 
-      // FORÇANDO A VERSÃO V1 EXPLICITAMENTE
-      const model = this.ai.getGenerativeModel(
-        { model: modelName },
-        { apiVersion: 'v1' } // <--- ISSO OBRIGA A SAIR DO v1beta
-      );
-
-      this.chat = model.startChat({
-        history: [
-          {
-            role: "user",
-            parts: [{ text: `Instruções: ${RULES}. Responda apenas: Olá! Sou seu Concierge Virtual. Qual seu nome completo?` }],
-          },
-          {
-            role: "model",
-            parts: [{ text: "Olá! Sou seu Concierge Virtual. Qual seu nome completo?" }],
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: this.history,
+          generationConfig: {
+            temperature: 0.4,
+            topP: 0.8,
+            maxOutputTokens: 1000,
           }
-        ],
-        generationConfig: {
-          temperature: 0.2,
-        },
+        })
       });
-    } catch (e) {
-      console.error("Erro na inicialização:", e);
-    }
-  }
 
-  async sendMessage(message: string): Promise<string> {
-    if (!this.ai || !this.chat) {
-      this.setupAI();
-      if (!this.ai) return 'ERRO_CRITICO: Chave de API ausente.';
-    }
+      const data = await response.json();
 
-    try {
-      const result = await this.chat!.sendMessage(message);
-      const response = await result.response;
-      return response.text();
-    } catch (error: any) {
-      const errorMsg = error.message || "";
-      console.error("DETALHE DO ERRO:", errorMsg);
-      
-      // Se der 404 de novo, pula pro próximo modelo
-      if ((errorMsg.includes("404") || errorMsg.includes("not found")) && this.modelIndex < MODELS.length - 1) {
-        this.modelIndex++;
-        this.initChat();
-        return this.sendMessage(message);
+      if (!response.ok) {
+        throw new Error(data.error?.message || "Erro na resposta do Google");
       }
-      return 'ERRO_CRITICO: Instabilidade técnica no motor do Google.';
+
+      const botResponse = data.candidates[0].content.parts[0].text;
+
+      // Adiciona a resposta do bot ao histórico para manter o contexto
+      this.history.push({
+        role: "model",
+        parts: [{ text: botResponse }]
+      });
+
+      return botResponse;
+
+    } catch (error: any) {
+      console.error("ERRO NA API DIRETA:", error.message);
+
+      // Se der erro 404 (Modelo não encontrado) ou 429 (Cota), tenta o próximo modelo
+      if ((error.message.includes("404") || error.message.includes("429")) && this.modelIndex < MODELS.length - 1) {
+        console.warn(`Tentando próximo modelo devido a erro: ${error.message}`);
+        this.modelIndex++;
+        return this.sendMessage(userMessage);
+      }
+
+      return `ERRO_CRITICO: ${error.message}`;
     }
   }
 
   reset() {
     this.modelIndex = 0;
-    this.initChat();
+    // Reinicia o histórico com as regras de negócio
+    this.history = [
+      {
+        role: "user",
+        parts: [{ text: `Instruções de Sistema: ${RULES}. Responda apenas: Olá! Sou seu Concierge Virtual. Qual seu nome completo?` }]
+      },
+      {
+        role: "model",
+        parts: [{ text: "Olá! Sou seu Concierge Virtual. Qual seu nome completo?" }]
+      }
+    ];
   }
 }
 
