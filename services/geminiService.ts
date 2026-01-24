@@ -1,16 +1,24 @@
 import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 
 const SYSTEM_INSTRUCTION = `
-Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é sênior, formal e breve.
-FAÇA APENAS UMA PERGUNTA POR VEZ. Sempre coloque as opções entre colchetes. Exemplo: [Sim] [Não].
+Você é o "Virtual Concierge" da MKT-traducao, consultoria sênior de vistos no Japão.
+TOM DE VOZ: Formal, breve, luxuoso e direto.
+
+REGRAS:
+1. FAÇA APENAS UMA PERGUNTA POR VEZ.
+2. SEMPRE coloque as opções entre colchetes. Exemplo: [Sim] [Não].
+3. Aguarde a resposta do usuário antes de seguir para o próximo passo.
+
+FLUXO:
+- Nome completo -> Intenção -> Serviço -> Situação Atual -> Cidade -> Conectar.
 `;
 
-// Lista de modelos atualizada (testando versões estáveis primeiro)
+// Modelos que você confirmou no seu Google AI Studio
 const MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-pro',
-  'gemini-pro'
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-flash-002",
+  "gemini-1.5-pro-latest",
+  "gemini-1.5-pro-002"
 ];
 
 export class GeminiChatService {
@@ -25,7 +33,6 @@ export class GeminiChatService {
   private setupAI() {
     const apiKey = import.meta.env.VITE_API_KEY;
     if (apiKey) {
-      // Inicialização robusta
       this.ai = new GoogleGenerativeAI(apiKey);
       this.initChat();
     }
@@ -33,21 +40,27 @@ export class GeminiChatService {
 
   private initChat() {
     if (!this.ai) return;
+
     try {
+      const modelName = MODELS[this.modelIndex];
+      console.log(`🤖 Tentando conexão com: ${modelName}`);
+
       const model = this.ai.getGenerativeModel({
-        model: MODELS[this.modelIndex],
+        model: modelName,
+        // Usando a instrução de sistema oficial suportada por esses modelos
         systemInstruction: SYSTEM_INSTRUCTION,
       });
 
       this.chat = model.startChat({
         history: [],
-        generationConfig: { 
-          temperature: 0.7, // Aumentado levemente para evitar travamentos
-          maxOutputTokens: 500 
+        generationConfig: {
+          temperature: 0.3, // Mais baixo para ser mais assertivo
+          topP: 0.8,
+          maxOutputTokens: 1000,
         },
       });
     } catch (e) {
-      console.error("Erro ao inicializar o modelo:", MODELS[this.modelIndex], e);
+      console.error("Erro ao inicializar chat:", e);
     }
   }
 
@@ -61,31 +74,23 @@ export class GeminiChatService {
       const result = await this.chat!.sendMessage(message);
       const response = await result.response;
       const text = response.text();
-      
-      if (!text) throw new Error("Resposta vazia da IA");
+
+      if (!text) throw new Error("Resposta vazia");
       return text;
 
     } catch (error: any) {
-      // ESTE LOG É IMPORTANTE: Veja o erro no Console do Navegador (F12)
-      console.error("ERRO DETALHADO DO GEMINI:", error);
+      console.error("DETALHES DO ERRO:", error);
 
-      const errorStatus = error?.status || "";
-      const errorMsg = error?.message || "";
-
-      // Se for erro de cota (429) ou erro de modelo, tenta o próximo
-      if ((errorMsg.includes("429") || errorMsg.includes("not found") || errorMsg.includes("500")) && this.modelIndex < MODELS.length - 1) {
-        console.warn("Tentando próximo modelo...");
+      // Se der erro 404, 429 ou 500, pula para o próximo modelo da sua lista
+      if (this.modelIndex < MODELS.length - 1) {
+        console.warn(`⚠️ Modelo ${MODELS[this.modelIndex]} falhou. Tentando próximo...`);
         this.modelIndex++;
         this.initChat();
+        // Tenta enviar a mensagem novamente com o novo modelo
         return this.sendMessage(message);
       }
 
-      // Se for erro de segurança ou região (403/Forbidden)
-      if (errorMsg.includes("403") || errorMsg.includes("location")) {
-        return 'ERRO_CRITICO: Este serviço de IA não está disponível na sua região ou a chave está bloqueada.';
-      }
-
-      return 'ERRO_CRITICO: Instabilidade técnica.';
+      return 'ERRO_CRITICO: Instabilidade técnica persistente no Google Gemini.';
     }
   }
 
