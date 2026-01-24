@@ -1,13 +1,13 @@
 import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 
-// Definimos a instrução apenas como uma string comum
-const RULES = `Sou o Virtual Concierge da MKT-traducao. 
+const RULES = `Você é o Virtual Concierge da MKT-traducao. 
 Regras: 1. Uma pergunta por vez. 2. Opções entre colchetes [Sim] [Não]. 
 Fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.`;
 
+// Usando os nomes que você confirmou no Google AI Studio
 const MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro'
+  "gemini-1.5-flash",
+  "gemini-1.5-pro"
 ];
 
 export class GeminiChatService {
@@ -31,16 +31,20 @@ export class GeminiChatService {
     if (!this.ai) return;
     
     try {
-      // CHAMADA MAIS SIMPLES POSSÍVEL: Apenas o nome do modelo
-      const model = this.ai.getGenerativeModel({ model: MODELS[this.modelIndex] });
+      const modelName = MODELS[this.modelIndex];
+      console.log(`📡 Tentando conexão ESTÁVEL (v1) com: ${modelName}`);
 
-      // Passamos as instruções como a PRIMEIRA mensagem da conversa (role: user/model)
-      // Isso evita o erro de "systemInstruction" desconhecido na API v1
+      // FORÇANDO A VERSÃO V1 EXPLICITAMENTE
+      const model = this.ai.getGenerativeModel(
+        { model: modelName },
+        { apiVersion: 'v1' } // <--- ISSO OBRIGA A SAIR DO v1beta
+      );
+
       this.chat = model.startChat({
         history: [
           {
             role: "user",
-            parts: [{ text: `Instruções de operação: ${RULES}. Responda apenas "Olá! Sou seu Concierge Virtual. Qual seu nome completo?"` }],
+            parts: [{ text: `Instruções: ${RULES}. Responda apenas: Olá! Sou seu Concierge Virtual. Qual seu nome completo?` }],
           },
           {
             role: "model",
@@ -52,7 +56,7 @@ export class GeminiChatService {
         },
       });
     } catch (e) {
-      console.error("Erro ao iniciar:", e);
+      console.error("Erro na inicialização:", e);
     }
   }
 
@@ -67,15 +71,16 @@ export class GeminiChatService {
       const response = await result.response;
       return response.text();
     } catch (error: any) {
-      console.error("ERRO NA API:", error.message);
+      const errorMsg = error.message || "";
+      console.error("DETALHE DO ERRO:", errorMsg);
       
-      // Se falhar, tenta o próximo modelo (ex: pula do flash para o pro)
-      if (this.modelIndex < MODELS.length - 1) {
+      // Se der 404 de novo, pula pro próximo modelo
+      if ((errorMsg.includes("404") || errorMsg.includes("not found")) && this.modelIndex < MODELS.length - 1) {
         this.modelIndex++;
         this.initChat();
         return this.sendMessage(message);
       }
-      return 'ERRO_CRITICO: Instabilidade técnica.';
+      return 'ERRO_CRITICO: Instabilidade técnica no motor do Google.';
     }
   }
 
