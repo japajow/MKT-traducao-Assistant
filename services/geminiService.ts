@@ -1,106 +1,86 @@
 import { GoogleGenAI, ChatSession } from "@google/generative-ai";
 
 const SYSTEM_INSTRUCTION = `
-Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é de alta costura: formal, breve e impecável.
+Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é sênior, formal e breve.
 
 REGRAS CRÍTICAS:
-1. NUNCA faça duas perguntas ao mesmo tempo.
-2. NUNCA use (A), (B) ou 1. para opções.
-3. SEMPRE que houver opções de escolha, coloque-as entre colchetes. Exemplo: [Sim] [Não] ou [Visto Permanente] [Consulado].
-4. Se o usuário digitar algo que não seja uma das opções quando elas forem oferecidas, peça gentilmente para ele escolher uma das opções.
+1. FAÇA APENAS UMA PERGUNTA POR VEZ.
+2. NUNCA use listas numeradas (1, 2, 3) ou letras (A, B, C) para opções.
+3. SEMPRE coloque as opções entre colchetes. Exemplo: [Sim] [Não] ou [Visto Permanente] [Consulado].
+4. Se o usuário fugir do assunto, peça gentilmente para escolher uma das opções.
 
-FLUXO PADRONIZADO PARA TODOS OS SERVIÇOS:
-Passo 1: Saudação e pedir Nome Completo.
-Passo 2: Perguntar qual a intenção principal: [Visto Permanente] [Visto Comum] [Consulado].
-Passo 3: Perguntar o Serviço Específico dentro da escolha:
-   - Se Permanente: [Cônjuge de Japonês] [Descendente] [Trabalho/Longa Permanência]
-   - Se Comum: [Renovação de Visto] [Troca de Categoria] [Certificado de Elegibilidade]
-   - Se Consulado: [Passaporte] [Registro Civil] [Procuração/Outros]
-Passo 4: Perguntar a "Situação Atual":
-   - Se Visto: [Tenho 1 ano] [Tenho 3 anos] [Tenho 5 anos]
-   - Se Consulado: [Já tenho os documentos] [Não sei quais documentos preciso]
-Passo 5: Perguntar a Província/Cidade onde reside no Japão.
-Passo 6: Finalização.
+FLUXO PADRONIZADO:
+Passo 1: Peça o Nome Completo.
+Passo 2: Intenção: [Visto Permanente] [Visto Comum] [Consulado].
+Passo 3: Serviço Específico dentro da escolha anterior.
+Passo 4: Situação Atual (Validade de visto ou posse de documentos).
+Passo 5: Província/Cidade de residência.
+Passo 6: Finalização Padrão.
 
 FINALIZAÇÃO:
 Diga exatamente: "Agradeço pelas informações. O seu relatório de triagem foi gerado. Para que o Consultor Bruno Hamawaki assuma sua assessoria agora mesmo, por favor, clique no botão 'CONECTAR COM CONSULTOR' abaixo."
 `;
 
-const AVAILABLE_MODELS = [
+// Lista de modelos para fallback (se um falhar, tenta o outro)
+const MODELS = [
   'gemini-1.5-flash-latest',
   'gemini-1.5-flash',
-  'gemini-1.5-pro-latest',
-  'gemini-1.0-pro'
+  'gemini-1.5-pro-latest'
 ];
 
 export class GeminiChatService {
   private chat: ChatSession | null = null;
   private ai: GoogleGenAI | null = null;
-  private currentModelIndex = 0;
+  private modelIndex = 0;
 
   constructor() {
-    this.setupAI();
+    this.initAI();
   }
 
-  private setupAI() {
-    // Busca a chave de API (VITE_API_KEY para ambiente Vite)
-    const apiKey = import.meta.env.VITE_API_KEY;
-    
-    if (apiKey) {
-      this.ai = new GoogleGenAI(apiKey);
-      this.initChat();
-    } else {
-      console.error("API_KEY não configurada no ambiente.");
+  private initAI() {
+    const key = import.meta.env.VITE_API_KEY;
+    if (key) {
+      this.ai = new GoogleGenAI(key);
+      this.startNewChat();
     }
   }
 
-  private initChat() {
+  private startNewChat() {
     if (!this.ai) return;
-    
-    const modelName = AVAILABLE_MODELS[this.currentModelIndex];
-    console.log(`Tentando usar o modelo: ${modelName}`);
-
     const model = this.ai.getGenerativeModel({
-      model: modelName,
-      systemInstruction: SYSTEM_INSTRUCTION,
+      model: MODELS[this.modelIndex],
+      systemInstruction: SYSTEM_INSTRUCTION
     });
-
     this.chat = model.startChat({
       history: [],
-      generationConfig: {
-        temperature: 0.2,
-      },
+      generationConfig: { temperature: 0.2 }
     });
   }
 
-  async sendMessage(message: string): Promise<string> {
-    if (!this.ai || !this.chat) {
-      this.setupAI();
-      if (!this.ai) return 'ERRO_CRITICO: Chave de API ausente.';
+  async sendMessage(msg: string): Promise<string> {
+    if (!this.chat) {
+      this.initAI();
+      if (!this.chat) return "ERRO_CRITICO: Chave de API não configurada.";
     }
 
     try {
-      const result = await this.chat!.sendMessage(message);
-      const response = await result.response;
-      return response.text();
-    } catch (error: any) {
-      const errorMessage = error.message || "";
-      
-      // Se atingir o limite (429) ou erro de servidor, troca o modelo
-      if (errorMessage.includes("429") || errorMessage.includes("500") || errorMessage.includes("fetch")) {
-        if (this.currentModelIndex < AVAILABLE_MODELS.length - 1) {
-          this.currentModelIndex++;
-          this.initChat();
-          return this.sendMessage(message); // Tenta novamente com novo modelo
-        }
+      const result = await this.chat.sendMessage(msg);
+      return result.response.text();
+    } catch (err: any) {
+      const errorMsg = err.message || "";
+      // Se for erro de limite (429) ou servidor (500), tenta outro modelo
+      if ((errorMsg.includes("429") || errorMsg.includes("500")) && this.modelIndex < MODELS.length - 1) {
+        this.modelIndex++;
+        this.startNewChat();
+        return this.sendMessage(msg);
       }
-      return 'ERRO_CRITICO: Instabilidade técnica momentânea.';
+      return "ERRO_CRITICO: Instabilidade técnica.";
     }
   }
 
   reset() {
-    this.currentModelIndex = 0;
-    this.initChat();
+    this.modelIndex = 0;
+    this.startNewChat();
   }
 }
 
