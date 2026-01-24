@@ -1,20 +1,16 @@
 import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 
 const SYSTEM_INSTRUCTION = `
-Você é o "Virtual Concierge" da MKT-traducao, consultoria sênior de vistos no Japão.
-TOM DE VOZ: Formal, breve, luxuoso e direto.
-
+Você é o "Virtual Concierge" da MKT-traducao. Tom de voz sênior e formal.
 REGRAS:
 1. FAÇA APENAS UMA PERGUNTA POR VEZ.
 2. SEMPRE coloque as opções entre colchetes. Exemplo: [Sim] [Não].
-3. Aguarde a resposta do usuário antes de seguir para o próximo passo.
-
-FLUXO:
-- Nome completo -> Intenção -> Serviço -> Situação Atual -> Cidade -> Conectar.
+3. Aguarde a resposta do usuário antes de seguir.
 `;
 
-// Modelos que você confirmou no seu Google AI Studio
+// Lista de modelos que você confirmou no AI Studio
 const MODELS = [
+  "gemini-1.5-flash",
   "gemini-1.5-flash-latest",
   "gemini-1.5-flash-002",
   "gemini-1.5-pro-latest",
@@ -43,24 +39,23 @@ export class GeminiChatService {
 
     try {
       const modelName = MODELS[this.modelIndex];
-      console.log(`🤖 Tentando conexão com: ${modelName}`);
+      console.log(`🤖 Conectando ao modelo: ${modelName} (Versão estável v1)`);
 
+      // A MUDANÇA ESTÁ AQUI: Forçamos a apiVersion para 'v1'
       const model = this.ai.getGenerativeModel({
         model: modelName,
-        // Usando a instrução de sistema oficial suportada por esses modelos
         systemInstruction: SYSTEM_INSTRUCTION,
-      });
+      }, { apiVersion: 'v1' }); // <--- ISSO RESOLVE O ERRO 404 DO v1beta
 
       this.chat = model.startChat({
         history: [],
         generationConfig: {
-          temperature: 0.3, // Mais baixo para ser mais assertivo
-          topP: 0.8,
-          maxOutputTokens: 1000,
+          temperature: 0.3,
+          maxOutputTokens: 800,
         },
       });
     } catch (e) {
-      console.error("Erro ao inicializar chat:", e);
+      console.error("Erro na inicialização:", e);
     }
   }
 
@@ -73,24 +68,21 @@ export class GeminiChatService {
     try {
       const result = await this.chat!.sendMessage(message);
       const response = await result.response;
-      const text = response.text();
-
-      if (!text) throw new Error("Resposta vazia");
-      return text;
-
+      return response.text();
     } catch (error: any) {
       console.error("DETALHES DO ERRO:", error);
 
-      // Se der erro 404, 429 ou 500, pula para o próximo modelo da sua lista
-      if (this.modelIndex < MODELS.length - 1) {
-        console.warn(`⚠️ Modelo ${MODELS[this.modelIndex]} falhou. Tentando próximo...`);
-        this.modelIndex++;
-        this.initChat();
-        // Tenta enviar a mensagem novamente com o novo modelo
-        return this.sendMessage(message);
+      // Se der erro 404 (Not Found), tenta o próximo modelo da lista
+      if (error.message?.includes("404") || error.message?.includes("not found")) {
+        if (this.modelIndex < MODELS.length - 1) {
+          console.warn(`⚠️ O modelo ${MODELS[this.modelIndex]} não respondeu no v1. Tentando o próximo...`);
+          this.modelIndex++;
+          this.initChat();
+          return this.sendMessage(message);
+        }
       }
 
-      return 'ERRO_CRITICO: Instabilidade técnica persistente no Google Gemini.';
+      return 'ERRO_CRITICO: Instabilidade técnica no Google Cloud.';
     }
   }
 
