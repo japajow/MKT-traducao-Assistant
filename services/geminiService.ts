@@ -38,7 +38,7 @@ export class GeminiChatService {
   }
 
   private setupAI() {
-    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_API_KEY;
+    const apiKey =  import.meta.env.VITE_API_KEY;
     if (apiKey) {
       this.ai = new GoogleGenAI({ apiKey });
       this.initChat();
