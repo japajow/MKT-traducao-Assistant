@@ -1,4 +1,4 @@
-import { GoogleGenAI, Chat } from "@google/genai";
+import { GoogleGenAI, ChatSession } from "@google/generative-ai";
 
 const SYSTEM_INSTRUCTION = `
 Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é de alta costura: formal, breve e impecável.
@@ -12,8 +12,13 @@ REGRAS CRÍTICAS:
 FLUXO PADRONIZADO PARA TODOS OS SERVIÇOS:
 Passo 1: Saudação e pedir Nome Completo.
 Passo 2: Perguntar qual a intenção principal: [Visto Permanente] [Visto Comum] [Consulado].
-Passo 3: Perguntar o Serviço Específico dentro da escolha.
-Passo 4: Perguntar a "Situação Atual".
+Passo 3: Perguntar o Serviço Específico dentro da escolha:
+   - Se Permanente: [Cônjuge de Japonês] [Descendente] [Trabalho/Longa Permanência]
+   - Se Comum: [Renovação de Visto] [Troca de Categoria] [Certificado de Elegibilidade]
+   - Se Consulado: [Passaporte] [Registro Civil] [Procuração/Outros]
+Passo 4: Perguntar a "Situação Atual":
+   - Se Visto: [Tenho 1 ano] [Tenho 3 anos] [Tenho 5 anos]
+   - Se Consulado: [Já tenho os documentos] [Não sei quais documentos preciso]
 Passo 5: Perguntar a Província/Cidade onde reside no Japão.
 Passo 6: Finalização.
 
@@ -21,87 +26,80 @@ FINALIZAÇÃO:
 Diga exatamente: "Agradeço pelas informações. O seu relatório de triagem foi gerado. Para que o Consultor Bruno Hamawaki assuma sua assessoria agora mesmo, por favor, clique no botão 'CONECTAR COM CONSULTOR' abaixo."
 `;
 
-// LISTA DE MODELOS POR ORDEM DE PRIORIDADE
 const AVAILABLE_MODELS = [
-  'gemini-1.5-flash-latest', // 1º: Mais rápido e estável
-  'gemini-1.5-flash',        // 2º: Alternativa direta
-  'gemini-1.5-pro-latest',   // 3º: Mais inteligente (porém mais lento/caro)
-  'gemini-1.0-pro'           // 4º: Último recurso
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro-latest',
+  'gemini-1.0-pro'
 ];
 
 export class GeminiChatService {
-  private chat: Chat | null = null;
+  private chat: ChatSession | null = null;
   private ai: GoogleGenAI | null = null;
-  private currentModelIndex = 0; // Começa pelo primeiro da lista
+  private currentModelIndex = 0;
 
   constructor() {
     this.setupAI();
   }
 
   private setupAI() {
-    const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_API_KEY;
+    // Busca a chave de API (VITE_API_KEY para ambiente Vite)
+    const apiKey = import.meta.env.VITE_API_KEY;
+    
     if (apiKey) {
-      this.ai = new GoogleGenAI({ apiKey });
+      this.ai = new GoogleGenAI(apiKey);
       this.initChat();
+    } else {
+      console.error("API_KEY não configurada no ambiente.");
     }
   }
 
   private initChat() {
     if (!this.ai) return;
     
-    // Pega o modelo baseado no índice atual
     const modelName = AVAILABLE_MODELS[this.currentModelIndex];
-    console.log(`🤖 Iniciando chat com modelo: ${modelName}`);
+    console.log(`Tentando usar o modelo: ${modelName}`);
 
-    this.chat = this.ai.chats.create({
+    const model = this.ai.getGenerativeModel({
       model: modelName,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: SYSTEM_INSTRUCTION,
+    });
+
+    this.chat = model.startChat({
+      history: [],
+      generationConfig: {
         temperature: 0.2,
       },
     });
   }
 
-  private async delay(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
   async sendMessage(message: string): Promise<string> {
-    if (!this.ai) {
+    if (!this.ai || !this.chat) {
       this.setupAI();
-      if (!this.ai) return 'ERRO_CRITICO: Chave de API não configurada.';
+      if (!this.ai) return 'ERRO_CRITICO: Chave de API ausente.';
     }
-    
-    if (!this.chat) this.initChat();
 
     try {
-      const result = await this.chat!.sendMessage({ message });
-      return result.text || '';
+      const result = await this.chat!.sendMessage(message);
+      const response = await result.response;
+      return response.text();
     } catch (error: any) {
       const errorMessage = error.message || "";
       
-      // Se o erro for limite de cota (429) ou erro interno do servidor (500)
-      if (errorMessage.includes("429") || errorMessage.includes("500") || errorMessage.includes("503")) {
-        
-        // Verifica se ainda temos modelos na lista para tentar
+      // Se atingir o limite (429) ou erro de servidor, troca o modelo
+      if (errorMessage.includes("429") || errorMessage.includes("500") || errorMessage.includes("fetch")) {
         if (this.currentModelIndex < AVAILABLE_MODELS.length - 1) {
-          this.currentModelIndex++; // Pula para o próximo modelo
-          console.warn(`⚠️ Limite atingido no modelo anterior. Trocando para: ${AVAILABLE_MODELS[this.currentModelIndex]}`);
-          
-          this.initChat(); // Reinicia o chat com o novo modelo
-          await this.delay(1000); // Espera 1 segundo
-          return this.sendMessage(message); // Tenta enviar a mensagem novamente
+          this.currentModelIndex++;
+          this.initChat();
+          return this.sendMessage(message); // Tenta novamente com novo modelo
         }
       }
-
-      // Se todos os modelos falharem, retorna o erro crítico que o App.tsx já sabe tratar
-      console.error("❌ Todos os modelos falharam.");
-      return 'ERRO_CRITICO: Instabilidade em todos os serviços de IA.';
+      return 'ERRO_CRITICO: Instabilidade técnica momentânea.';
     }
   }
 
   reset() {
-    this.currentModelIndex = 0; // Volta para o modelo mais rápido no reset
+    this.currentModelIndex = 0;
     this.initChat();
   }
 }
