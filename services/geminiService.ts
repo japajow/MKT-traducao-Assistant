@@ -1,5 +1,4 @@
-import { GoogleGenAI, Chat } from "@google/genai";
-
+import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 const SYSTEM_INSTRUCTION = `
 Você é o "Virtual Concierge" da MKT-traducao. Seu tom de voz é de alta costura: formal, breve e impecável.
 
