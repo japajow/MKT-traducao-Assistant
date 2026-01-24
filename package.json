@@ -15,7 +15,8 @@
     "react-dom": "^19.2.3",
     "vite": "^6.0.0",
     "vite-plugin-env-compatible": "^2.0.1",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@google/generative-ai": "^0.21.0",
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
