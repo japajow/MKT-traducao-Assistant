@@ -1,4 +1,8 @@
-const RULES = `Você é o Concierge da MKT-traducao. Responda brevemente. Uma pergunta por vez. Opções em colchetes [Sim] [Não].`;
+const RULES = `Instruções de Sistema: Você é o Concierge da MKT-traducao. 
+1. Responda de forma breve e formal. 
+2. Faça apenas UMA pergunta por vez. 
+3. Use colchetes para opções: [Sim] [Não]. 
+4. Siga o fluxo: Nome -> Intenção -> Serviço -> Situação -> Cidade.`;
 
 export class GeminiChatService {
   private history: any[] = [];
@@ -9,28 +13,25 @@ export class GeminiChatService {
 
   async sendMessage(userMessage: string): Promise<string> {
     const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) return "ERRO: Chave de API ausente na Vercel.";
 
-    if (!apiKey) return "ERRO: Configure a VITE_API_KEY na Vercel.";
-
+    // Adiciona a fala do usuário ao histórico
     this.history.push({
       role: "user",
       parts: [{ text: userMessage }]
     });
 
     try {
-      // USANDO v1 (ESTÁVEL) e o modelo padrão absoluto
+      // URL ESTÁVEL V1
       const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: this.history,
-          systemInstruction: {
-            parts: [{ text: RULES }]
-          },
+          contents: this.history, // Enviamos apenas o histórico (sem o campo systemInstruction que causa o erro 400)
           generationConfig: {
-            temperature: 0.5,
+            temperature: 0.4,
             maxOutputTokens: 800,
           }
         })
@@ -39,15 +40,12 @@ export class GeminiChatService {
       const data = await response.json();
 
       if (!response.ok) {
-        // Se der 404 aqui, a chave está sem permissão no Google Cloud
-        if (response.status === 404) {
-            return "ERRO_CRITICO: O Google não reconheceu este modelo. Verifique se a API Generativa está ativa no seu console do Google Cloud.";
-        }
-        throw new Error(data.error?.message || "Erro na API");
+        throw new Error(data.error?.message || "Erro desconhecido");
       }
 
       const botResponse = data.candidates[0].content.parts[0].text;
 
+      // Salva a resposta da IA no histórico
       this.history.push({
         role: "model",
         parts: [{ text: botResponse }]
@@ -56,13 +54,24 @@ export class GeminiChatService {
       return botResponse;
 
     } catch (error: any) {
-      console.error("FALHA:", error.message);
+      console.error("FALHA NO MOTOR:", error.message);
       return `ERRO_CRITICO: ${error.message}`;
     }
   }
 
   reset() {
-    this.history = [];
+    // Iniciamos o histórico com as REGRAS injetadas como uma conversa prévia
+    // Isso garante que a IA siga as regras sem precisar do campo proibido
+    this.history = [
+      {
+        role: "user",
+        parts: [{ text: RULES + " Responda apenas: 'Olá! Sou seu Concierge Virtual. Qual seu nome completo?'" }]
+      },
+      {
+        role: "model",
+        parts: [{ text: "Olá! Sou seu Concierge Virtual. Qual seu nome completo?" }]
+      }
+    ];
   }
 }
 
