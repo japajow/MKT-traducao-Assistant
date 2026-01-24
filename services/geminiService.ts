@@ -16,7 +16,7 @@ FINALIZAÇÃO:
 Diga exatamente: "Agradeço pelas informações. O seu relatório de triagem foi gerado. Para que o Consultor Bruno Hamawaki assuma sua assessoria agora mesmo, por favor, clique no botão 'CONECTAR COM CONSULTOR' abaixo."
 `;
 
-const MODEL_NAME = 'gemini-1.5-flash';
+const MODEL_NAME = 'gemini-flash-lite-latest';
 
 export class GeminiChatService {
   private chat: ChatSession | null = null;
