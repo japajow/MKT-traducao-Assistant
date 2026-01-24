@@ -41,7 +41,7 @@ const App: React.FC = () => {
     setStatus(AppStatus.LOADING);
 
     const response = await geminiService.sendMessage(textToSend);
-    
+
     if (response.startsWith("ERRO_CRITICO")) {
       setHasError(true);
       const cleanError = response.replace("ERRO_CRITICO: ", "");
@@ -73,15 +73,15 @@ const App: React.FC = () => {
     return options;
   };
 
-  const currentOptions = messages.length > 0 && messages[messages.length - 1].role === 'model' 
-    ? parseOptions(messages[messages.length - 1].text) 
+  const currentOptions = messages.length > 0 && messages[messages.length - 1].role === 'model'
+    ? parseOptions(messages[messages.length - 1].text)
     : [];
 
   const openWhatsApp = () => {
     let summary = `*MKT TRADUCAO - SOLICITACAO PREMIUM*\n`;
     summary += `------------------------------------\n`;
     summary += `*Status:* ${hasError ? 'Contingencia por Erro' : 'Triagem Concluida'}\n\n`;
-    
+
     messages.forEach((msg) => {
       if (msg.role === 'user') summary += `*R:* ${msg.text}\n`;
     });
@@ -111,18 +111,24 @@ const App: React.FC = () => {
         <div ref={scrollRef} className="h-full overflow-y-auto px-3 py-6 space-y-4 no-scrollbar">
           {messages.map((msg, idx) => (
             <div key={idx} className="message-appear">
-              <ChatMessage message={msg} />
+              {/* Use uma versão limpa do texto para o balão */}
+              <ChatMessage
+                message={{
+                  ...msg,
+                  text: msg.role === 'model' ? cleanText(msg.text) : msg.text
+                }}
+              />
             </div>
           ))}
-          
-          {/* BOTÕES DINÂMICOS */}
+
+          {/* BOTÕES DINÂMICOS - Agora muito mais precisos */}
           {!isFinalized && !hasError && status === AppStatus.IDLE && currentOptions.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2 px-1 animate-fade-in ml-10">
+            <div className="flex flex-wrap gap-2 mt-4 px-1 animate-fade-in ml-10">
               {currentOptions.map((opt, i) => (
-                <button 
+                <button
                   key={i}
                   onClick={() => handleSendMessage(opt)}
-                  className="bg-white border border-[#c5a572]/40 text-[#0f172a] text-[11px] font-semibold px-4 py-2 rounded-full shadow-sm hover:bg-[#0f172a] hover:text-[#c5a572] transition-all"
+                  className="bg-white border-2 border-[#c5a572]/40 text-[#0f172a] text-[12px] font-bold px-5 py-2.5 rounded-full shadow-md hover:bg-[#0f172a] hover:text-[#c5a572] hover:border-[#0f172a] transition-all transform active:scale-95"
                 >
                   {opt}
                 </button>
@@ -151,7 +157,7 @@ const App: React.FC = () => {
 
       <footer className="p-3.5 bg-white border-t border-slate-100 shrink-0">
         <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-center bg-slate-50 rounded-xl px-4 py-1 border border-slate-200 focus-within:border-[#c5a572] transition-all">
-          <input 
+          <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
