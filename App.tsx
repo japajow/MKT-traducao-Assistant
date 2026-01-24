@@ -3,8 +3,7 @@ import { Message, AppStatus } from './types';
 import { geminiService } from './services/geminiService';
 import ChatMessage from './components/ChatMessage';
 
-// Chave atualizada para v3 para limpar caches problemáticos anteriores
-const CACHE_KEY = 'mkt_concierge_v3_final';
+const CACHE_KEY = 'mkt_concierge_cache_v4';
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -16,7 +15,6 @@ const App: React.FC = () => {
 
   const ADMIN_PHONE = "817091225330";
 
-  // Utilitários
   const parseOptions = (t: string) => {
     const matches = t.match(/\[([^\]]+)\]/g);
     return matches ? matches.map(m => m.replace(/[\[\]]/g, '')) : [];
@@ -29,7 +27,7 @@ const App: React.FC = () => {
       messages: msgs,
       isFinalized: finalized,
       hasError: error,
-      time: Date.now()
+      timestamp: Date.now()
     }));
   };
 
@@ -44,25 +42,23 @@ const App: React.FC = () => {
 
   const startApp = async () => {
     setStatus(AppStatus.LOADING);
-    const res = await geminiService.sendMessage("Iniciando triagem.");
+    const res = await geminiService.sendMessage("Iniciando triagem premium.");
     const firstMsg: Message = { role: 'model', text: res, timestamp: new Date() };
     setMessages([firstMsg]);
     setStatus(AppStatus.IDLE);
     saveState([firstMsg], false, false);
   };
 
-  // Carregar dados salvos com correção de datas (Evita Tela Branca)
   useEffect(() => {
     const cache = localStorage.getItem(CACHE_KEY);
     if (cache) {
       try {
         const data = JSON.parse(cache);
-        // IMPORTANTE: Converter timestamp string de volta para objeto Date
-        const restoredMessages = data.messages.map((m: any) => ({
+        const restored = data.messages.map((m: any) => ({
           ...m,
           timestamp: new Date(m.timestamp)
         }));
-        setMessages(restoredMessages);
+        setMessages(restored);
         setIsFinalized(data.isFinalized);
         setHasError(data.hasError);
       } catch (e) {
@@ -81,11 +77,14 @@ const App: React.FC = () => {
     const text = (override || input).trim();
     if (!text || status === AppStatus.LOADING || hasError) return;
 
-    if (text === "Nova Dúvida") { handleReset(); return; }
+    if (text === "Nova Dúvida") {
+      handleReset();
+      return;
+    }
 
     const userMsg: Message = { role: 'user', text, timestamp: new Date() };
-    const newHistory = [...messages, userMsg];
-    setMessages(newHistory);
+    const history = [...messages, userMsg];
+    setMessages(history);
     setInput('');
     setStatus(AppStatus.LOADING);
 
@@ -95,17 +94,17 @@ const App: React.FC = () => {
       setHasError(true);
       const errModel: Message = { 
         role: 'model', 
-        text: "⚠️ Ocorreu um erro técnico. Por favor, clique no botão abaixo para prosseguirmos via WhatsApp.", 
+        text: "⚠️ Ocorreu uma instabilidade técnica. Vamos continuar pelo WhatsApp para sua comodidade?", 
         timestamp: new Date() 
       };
-      setMessages([...newHistory, errModel]);
-      saveState([...newHistory, errModel], false, true);
+      setMessages([...history, errModel]);
+      saveState([...history, errModel], false, true);
     } else {
       const finalized = isFinalized || res.includes("CONECTAR COM CONSULTOR");
       const modelMsg: Message = { role: 'model', text: res, timestamp: new Date() };
-      setMessages([...newHistory, modelMsg]);
+      setMessages([...history, modelMsg]);
       setIsFinalized(finalized);
-      saveState([...newHistory, modelMsg], finalized, false);
+      saveState([...history, modelMsg], finalized, false);
     }
     setStatus(AppStatus.IDLE);
   }, [input, status, messages, isFinalized, hasError]);
@@ -115,14 +114,14 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-white shadow-2xl overflow-hidden border-x border-slate-200">
-      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-4 flex items-center justify-between shrink-0 z-20">
+      <header className="bg-[#0f172a] border-b border-[#c5a572]/30 px-5 py-4 flex items-center justify-between shrink-0 z-20 shadow-lg">
         <div className="flex items-center space-x-3">
-          <div className="gold-gradient w-9 h-9 rounded-full flex items-center justify-center text-[#0f172a] shadow-lg">
+          <div className="gold-gradient w-9 h-9 rounded-full flex items-center justify-center text-[#0f172a]">
             <i className="fa-solid fa-crown text-xs"></i>
           </div>
           <div>
-            <h1 className="text-white font-serif text-base font-bold">MKT Concierge</h1>
-            <p className="text-[#c5a572] text-[8px] uppercase tracking-[3px] font-black opacity-80">Premium AI</p>
+            <h1 className="text-white font-serif text-base font-bold tracking-tight">MKT Concierge</h1>
+            <p className="text-[#c5a572] text-[8px] uppercase tracking-[3px] font-black opacity-80">Premium Assistant</p>
           </div>
         </div>
         <button onClick={handleReset} className="text-[#c5a572] hover:bg-white/10 p-2 rounded-full transition-all">
@@ -161,10 +160,10 @@ const App: React.FC = () => {
       <div className={`px-4 bg-white transition-all duration-500 overflow-hidden ${(isFinalized || hasError) ? 'max-h-40 py-4 border-t' : 'max-h-0'}`}>
         <button onClick={() => {
           const summary = messages.filter(m => m.role === 'user').map(m => `*R:* ${m.text}`).join('\n');
-          window.open(`https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent("*MKT TRADUÇÃO*\n\n" + summary)}`, '_blank');
+          window.open(`https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent("*MKT TRADUÇÃO - TRIAGEM*\n\n" + summary)}`, '_blank');
         }} className={`w-full ${hasError ? 'bg-green-600' : 'gold-gradient'} text-[#0f172a] font-black py-4 rounded-2xl flex items-center justify-center space-x-3 shadow-xl uppercase text-[11px] tracking-widest`}>
-          <i className="fa-brands fa-whatsapp text-xl"></i>
-          <span>{hasError ? 'Falar no WhatsApp (Erro Técnico)' : 'Conectar com Bruno Hamawaki'}</span>
+          <i className="fa-brands fa-whatsapp text-xl text-[#0f172a]"></i>
+          <span>{hasError ? 'Atendimento no WhatsApp' : 'Conectar com Bruno Hamawaki'}</span>
         </button>
       </div>
 
@@ -174,11 +173,11 @@ const App: React.FC = () => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={hasError ? "Erro técnico detectado." : isFinalized ? "Triagem finalizada." : "Escreva aqui..."}
+            placeholder={hasError ? "Erro técnico. Use o WhatsApp." : isFinalized ? "Triagem concluída." : "Digite sua mensagem..."}
             disabled={status === AppStatus.LOADING || isFinalized || hasError}
-            className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none disabled:cursor-not-allowed"
+            className="flex-1 py-3 bg-transparent text-sm text-[#0f172a] outline-none"
           />
-          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized || hasError} className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#0f172a] text-[#c5a572] disabled:opacity-10 shadow-lg transition-all">
+          <button type="submit" disabled={!input.trim() || status === AppStatus.LOADING || isFinalized || hasError} className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-[#0f172a] text-[#c5a572] disabled:opacity-10 shadow-lg">
             <i className="fa-solid fa-paper-plane text-xs"></i>
           </button>
         </form>
